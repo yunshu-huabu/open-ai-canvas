@@ -24,6 +24,9 @@ type TextCapabilityConfig struct {
 	// Streaming controls whether this model accepts upstream SSE text responses.
 	// A nil value is treated as true for backwards compatibility with older configs.
 	Streaming *bool `json:"streaming,omitempty"`
+	// Thinking controls whether the model accepts the Agent reasoning/thinking options.
+	// A nil value is treated as true for backwards compatibility with older configs.
+	Thinking *bool `json:"thinking,omitempty"`
 	// ContextWindowTokens is the provider's total input plus output context window.
 	// It is a model contract, not an application transport ceiling.
 	ContextWindowTokens int `json:"contextWindowTokens"`
@@ -214,7 +217,8 @@ func legacyImageSizeValues() []string {
 func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *ModelCapabilityConfig {
 	// 文本模型是否支持视觉输入不能从协议或模型名可靠推断，默认关闭，由管理员按真实上游能力开启。
 	streaming := true
-	text := &TextCapabilityConfig{Streaming: &streaming, ContextWindowTokens: 128000, MaxOutputTokens: 16384, References: TextReferenceConfig{PromptMaxChars: 32000}}
+	thinking := true
+	text := &TextCapabilityConfig{Streaming: &streaming, Thinking: &thinking, ContextWindowTokens: 128000, MaxOutputTokens: 16384, References: TextReferenceConfig{PromptMaxChars: 32000}}
 	video := &VideoCapabilityConfig{
 		References:        VideoReferenceConfig{PromptMaxChars: DefaultVideoPromptMaxChars, MinImages: 0, MaxImages: 9, MaxImageBytes: 30 * 1024 * 1024, MaxVideos: 0, MaxVideoBytes: 0, MaxVideoDuration: 0, MaxAudios: 0, MaxAudioBytes: 0, MaxAudioDuration: 0},
 		Duration:          VideoDurationConfig{Selection: "range", Min: 1, Max: 15, Step: 1, Default: 6},
@@ -331,6 +335,10 @@ func NormalizeModelCapabilityConfigForModel(capability string, protocol string, 
 		if text.Streaming == nil {
 			streaming := true
 			text.Streaming = &streaming
+		}
+		if text.Thinking == nil {
+			thinking := true
+			text.Thinking = &thinking
 		}
 		if text.ContextWindowTokens == 0 {
 			text.ContextWindowTokens = 128000

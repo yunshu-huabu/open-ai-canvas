@@ -80,6 +80,21 @@ func TestDefaultVideoPromptMaxCharsAllowsComposedCanvasPrompt(t *testing.T) {
 	}
 }
 
+func TestNormalizeTextCapabilityDefaultsThinkingForLegacyConfigs(t *testing.T) {
+	legacy := &ModelCapabilityConfig{Version: 1, Text: &TextCapabilityConfig{References: TextReferenceConfig{PromptMaxChars: 32000}}}
+	normalized, err := NormalizeModelCapabilityConfigForModel("text", "openrouter-chat", "mimo-v2.6-pro", legacy)
+	if err != nil || normalized == nil || normalized.Text == nil || normalized.Text.Thinking == nil || !*normalized.Text.Thinking {
+		t.Fatalf("legacy text capability thinking = %#v, err = %v", normalized, err)
+	}
+
+	disabled := false
+	explicitlyDisabled := &ModelCapabilityConfig{Version: 1, Text: &TextCapabilityConfig{Thinking: &disabled, References: TextReferenceConfig{PromptMaxChars: 32000}}}
+	normalized, err = NormalizeModelCapabilityConfigForModel("text", "openrouter-chat", "mimo-v2.6-pro", explicitlyDisabled)
+	if err != nil || normalized == nil || normalized.Text == nil || normalized.Text.Thinking == nil || *normalized.Text.Thinking {
+		t.Fatalf("explicitly disabled thinking = %#v, err = %v", normalized, err)
+	}
+}
+
 func TestValidateTaskCapabilityRejectsWorkflowPromptAboveConfiguredLimit(t *testing.T) {
 	profile := DefaultModelCapabilityConfigForModel("runninghub-workflow-video", "workflow-video")
 	profile.Video.References.PromptMaxChars = 10_000

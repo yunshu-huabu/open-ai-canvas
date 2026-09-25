@@ -363,6 +363,7 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
             <div className="admin-capability-editor space-y-3 rounded-md bg-muted/20 p-3">
                 <CapabilityGroup title="输出方式" description="控制向上游文本模型请求的响应方式。">
                     <ParameterField label="SSE 流式输出" description="启用后发送 stream=true，并实时推送文本增量；关闭时等待完整 JSON 响应。" supported={profile.streaming !== false} disabled={Boolean(disabled)} onChange={(streaming) => update({ streaming })} />
+                    <ParameterField label="Agent 推理模式" description="启用后允许 Agent 在新运行中选择自动或深入推理，并向上游发送思考参数。" supported={profile.thinking !== false} disabled={Boolean(disabled)} onChange={(thinking) => update({ thinking })} />
                 </CapabilityGroup>
             </div>
         );
@@ -403,6 +404,10 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
                 <div className="text-sm font-medium">文本理解能力</div>
                 <div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/48">默认不假设支持图片或视频，只有明确配置后相关请求才会进入该模型。</div>
             </div>
+            <CapabilityGroup title="输出方式" description="控制向上游文本模型请求的响应方式。">
+                <ParameterField label="SSE 流式输出" description="启用后发送 stream=true，并实时推送文本增量；关闭时等待完整 JSON 响应。" supported={profile.streaming !== false} disabled={Boolean(disabled)} onChange={(streaming) => update({ streaming })} />
+                <ParameterField label="Agent 推理模式" description="启用后允许 Agent 在新运行中选择自动或深入推理，并向上游发送思考参数。" supported={profile.thinking !== false} disabled={Boolean(disabled)} onChange={(thinking) => update({ thinking })} />
+            </CapabilityGroup>
             <CapabilityGroup title="上下文能力" description="这是上游文本模型的能力合同，决定 Agent 本轮可保留的输入预算；不会改变运行时 checkpoint 的持久化上限。">
                 <div className="grid gap-3 sm:grid-cols-2">
                     <NumberField label="上下文窗口 Token" value={profile.contextWindowTokens} min={4_096} max={10_000_000} disabled={Boolean(disabled)} onChange={(next) => update({ contextWindowTokens: next || 4_096 })} />

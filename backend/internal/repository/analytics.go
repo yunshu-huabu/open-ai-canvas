@@ -258,7 +258,16 @@ func (r *Repository) VideoAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, 
 }
 
 func (r *Repository) apiCallLogQuery(filter AnalyticsFilter) *gorm.DB {
-	query := r.db.Where("api_call_logs.created_at >= ? AND api_call_logs.created_at < ?", filter.From, filter.To)
+	createdAt := "api_call_logs.created_at"
+	fromValue, toValue := "?", "?"
+	if r.db.Dialector.Name() == "sqlite" {
+		// SQLite stores these timestamps as RFC3339 strings with an offset. Compare
+		// parsed instants so UTC filter boundaries do not become lexicographical
+		// string comparisons against local timestamps.
+		createdAt = "datetime(api_call_logs.created_at)"
+		fromValue, toValue = "datetime(?)", "datetime(?)"
+	}
+	query := r.db.Where(createdAt+" >= "+fromValue+" AND "+createdAt+" < "+toValue, filter.From, filter.To)
 	if filter.UserID != "" {
 		query = query.Where("api_call_logs.user_id = ?", filter.UserID)
 	}

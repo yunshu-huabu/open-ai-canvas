@@ -297,6 +297,7 @@ export function defaultImageCapabilityConfig(protocol?: ModelProtocol, model = "
 export function defaultModelCapabilityConfig(protocol?: ModelProtocol, model = ""): ModelCapabilityConfig {
     const text: TextCapabilityConfig = {
         streaming: true,
+        thinking: true,
         contextWindowTokens: 128_000,
         maxOutputTokens: 16_384,
         // 文本模型的视觉能力必须由管理员明确开启，不能根据模型名猜测。

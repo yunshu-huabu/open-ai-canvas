@@ -60,6 +60,41 @@ func TestAPICallLogRecordTypeFiltersListAndExport(t *testing.T) {
 	}
 }
 
+func TestQueryAPICallLogsHandlesSQLiteTimezoneOffsets(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:api-log-timezone?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&model.ApiCallLog{}); err != nil {
+		t.Fatal(err)
+	}
+	local := time.FixedZone("UTC+8", 8*60*60)
+	if err := db.Create(&model.ApiCallLog{
+		ID:          "local-time-log",
+		RequestKind: "create",
+		Status:      model.ApiCallStatusSucceeded,
+		CreatedAt:   time.Date(2026, 9, 26, 3, 16, 0, 0, local),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	logs, total, err := New(db).QueryAPICallLogs(APICallLogFilter{
+		AnalyticsFilter: AnalyticsFilter{
+			From: time.Date(2026, 8, 27, 0, 0, 0, 0, time.UTC),
+			To:   time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC),
+		},
+		RecordType: "all",
+		Page:       1,
+		Limit:      20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(logs) != 1 || logs[0].ID != "local-time-log" {
+		t.Fatalf("timezone-aware query = total:%d logs:%#v", total, logs)
+	}
+}
+
 func (l *sqlCaptureLogger) LogMode(logger.LogLevel) logger.Interface { return l }
 func (*sqlCaptureLogger) Info(context.Context, string, ...any)       {}
 func (*sqlCaptureLogger) Warn(context.Context, string, ...any)       {}
