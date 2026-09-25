@@ -61,7 +61,7 @@
 | `response.taskId` | `{"$coalesce":[{"$ref":"response.id"},{"$ref":"response.task_id"},{"$ref":"response.taskId"},{"$ref":"response.data.id"},{"$ref":"taskId"}]}` |
 | `response.status` | `{"$coalesce":[{"$ref":"response.status"},{"$ref":"response.state"},{"$ref":"response.data.status"},"pending"]}` |
 | `response.message` | `{"$coalesce":[{"$ref":"response.error.message"},{"$ref":"response.message"},{"$ref":"response.fail_reason"}]}` |
-| `response.videos` | `{"$coalesce":[{"$ref":"response.video_url"},{"$ref":"response.videoUrl"},{"$ref":"response.result_url"},{"$ref":"response.url"},{"$ref":"response.data.video_url"},{"$ref":"response.output.url"}]}` |
+| `response.videos` | `{"$coalesce":[{"$ref":"response.video_url"},{"$ref":"response.videoUrl"},{"$ref":"response.result_url"},{"$ref":"response.url"},{"$ref":"response.data.video_url"},{"$ref":"response.data.metadata.url"},{"$ref":"response.metadata.url"},{"$ref":"response.output.url"}]}` |
 | `response.errorPaths[0]` | `"error.code"` |
 | `response.resultEphemeral` | `true` |
 
@@ -355,6 +355,12 @@
               },
               {
                 "$ref": "response.data.video_url"
+              },
+              {
+                "$ref": "response.data.metadata.url"
+              },
+              {
+                "$ref": "response.metadata.url"
               },
               {
                 "$ref": "response.output.url"

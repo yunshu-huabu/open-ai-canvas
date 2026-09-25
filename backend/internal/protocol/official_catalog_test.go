@@ -463,6 +463,24 @@ func TestNewAPIVideoGenerationsParsesNestedVideoResults(t *testing.T) {
 	}
 }
 
+func TestSeedanceVideosCompatibleParsesMetadataVideoURL(t *testing.T) {
+	adapter := officialPackageAdapter(t, "seedance-videos-compatible.yingce-plugin", "seedance-videos-compatible")
+	state, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "task-seedance"}, []byte(`{
+		"id":"task-seedance",
+		"status":"completed",
+		"metadata":{"url":"https://api.200t.cn/v1/videos/task-seedance/content"}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != StatusSucceeded || state.Result == nil || len(state.Result.Videos) != 1 {
+		t.Fatalf("state = %#v, want one completed video", state)
+	}
+	if state.Result.Videos[0].URL != "https://api.200t.cn/v1/videos/task-seedance/content" {
+		t.Fatalf("video = %#v, want metadata URL", state.Result.Videos[0])
+	}
+}
+
 func TestOfficialOpenAIVideosDeclaresAuthenticatedResultDownload(t *testing.T) {
 	adapter := officialPackageAdapter(t, "openai-videos.yingce-plugin", "newapi")
 	capability, ok := adapter.(ResultCapability)

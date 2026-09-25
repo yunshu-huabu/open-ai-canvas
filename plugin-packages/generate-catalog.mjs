@@ -89,7 +89,7 @@ const asyncResponse = (kind, overrides = {}) => ({
   taskId: coalesce(ref("response.id"), ref("response.task_id"), ref("response.taskId"), ref("response.data.id"), ref("taskId")),
   status: coalesce(ref("response.status"), ref("response.state"), ref("response.data.status"), "pending"),
   message: coalesce(ref("response.error.message"), ref("response.message"), ref("response.fail_reason")),
-  [kind + "s"]: coalesce(ref(`response.${kind}_url`), ref(`response.${kind}Url`), ref("response.result_url"), ref("response.url"), ref(`response.data.${kind}_url`), ref("response.output.url")),
+  [kind + "s"]: coalesce(ref(`response.${kind}_url`), ref(`response.${kind}Url`), ref("response.result_url"), ref("response.url"), ref(`response.data.${kind}_url`), ref("response.data.metadata.url"), ref("response.metadata.url"), ref("response.output.url")),
   errorPaths: ["error.code"],
   resultEphemeral: true,
   ...overrides
