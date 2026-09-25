@@ -481,6 +481,39 @@ func TestSeedanceVideosCompatibleParsesMetadataVideoURL(t *testing.T) {
 	}
 }
 
+func TestTwoHundredTSeedanceUsesNativeVideoContract(t *testing.T) {
+	adapter := officialPackageAdapter(t, "200t-seedance-video.yingce-plugin", "200t-seedance-video")
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "seedance2.5", Prompt: "镜头推进", Duration: 30, AspectRatio: "9:16", Resolution: "720p",
+		Images: []MediaReference{{DataURL: "data:image/png;base64,QUJD", Role: "reference_image", Order: 1}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Method != "POST" || spec.Path != "/videos" || spec.ContentType != "application/json" {
+		t.Fatalf("create spec = %#v", spec)
+	}
+	body := manifestTestBody(t, spec)
+	if body["model"] != "seedance2.5" || body["seconds"] != "30" || body["ratio"] != "9:16" || body["resolution"] != "720p" || body["mode"] != "image" {
+		t.Fatalf("200T create body = %#v", body)
+	}
+	references, _ := body["input_references"].([]any)
+	if len(references) != 1 || references[0] != "data:image/png;base64,QUJD" {
+		t.Fatalf("200T input_references = %#v", references)
+	}
+	resultAdapter, ok := adapter.(ResultAdapter)
+	if !ok {
+		t.Fatal("200T protocol does not implement result download")
+	}
+	result, err := resultAdapter.BuildResult(context.Background(), PollContext{TaskID: "task-200t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Method != "GET" || result.Path != "/videos/task-200t/content" || result.Headers["Accept"] != "video/mp4" || result.Auth.Type != "bearer" {
+		t.Fatalf("200T result spec = %#v", result)
+	}
+}
+
 func TestOfficialOpenAIVideosDeclaresAuthenticatedResultDownload(t *testing.T) {
 	adapter := officialPackageAdapter(t, "openai-videos.yingce-plugin", "newapi")
 	capability, ok := adapter.(ResultCapability)

@@ -513,6 +513,10 @@ func providerPrefersMediaURLs(interfaceType string, input canvasGenerationInput)
 		// OpenAI 图片编辑等 multipart 请求需要真实文件字节，遮罩场景不能改发 URL。
 		return false
 	}
+	if strings.TrimSpace(interfaceType) == "200t-seedance-video" {
+		// 200T 的 JSON 接口只接受 data URL/base64 参考图，不接受远程图片 URL。
+		return false
+	}
 	switch strings.TrimSpace(interfaceType) {
 	case string(model.ChannelInterfaceChatCompletion), string(model.ChannelInterfaceOpenAIResponse), string(model.ChannelInterfaceClaudeAPI),
 		string(model.ChannelInterfaceGrokImage), string(model.ChannelInterfaceVolcengineArkImage), string(model.ChannelInterfaceVolcengineArkAgentPlanImage),

@@ -664,6 +664,30 @@ add({
 });
 
 add({
+  id: "200t-seedance-video", providerId: "200t-seedance-video", name: "200T Seedance Video", vendor: "200T AI聚合", capability: "video",
+  baseUrl: "https://api.200t.cn/v1", auth: bearer, params: videoParams, requiresPublicMediaUrls: false,
+  validations: [
+    { assert: { $in: [lower(ref("request.model")), ["seedance2.5", "seedance2.0", "seedance2.0fast", "seedance2.0mini"]] }, message: "200T Seedance 仅支持 seedance2.5、seedance2.0、seedance2.0fast、seedance2.0mini" },
+    { assert: { $lte: [len(ref("request.images")), 30] }, message: "200T Seedance 最多支持 30 张参考图" }
+  ],
+  notes: "200T AI聚合专属 Seedance 视频协议。请求固定走 https://api.200t.cn/v1/videos，使用 seconds、ratio、camera_movement、resolution、mode 和 data URL/base64 的 input_references；完成后通过同一 Token 下载 /videos/{task_id}/content。",
+  create: jsonCreate("/videos", {
+    model: ref("request.model"), prompt: ref("request.prompt"), seconds: { $toString: ref("request.duration") },
+    ratio: coalesce(ref("request.aspectRatio"), "9:16"),
+    camera_movement: coalesce(ref("request.providerOptions.200t-seedance-video.camera_movement"), "auto"),
+    resolution: coalesce(ref("request.resolution"), "720p"),
+    mode: conditional(gt(len(ref("request.images")), 0), "image", "text"),
+    input_references: omit(map(sorted(ref("request.images")), "media", coalesce(ref("media.dataUrl"), ref("media.value"))))
+  }),
+  poll: { method: "GET", path: "/videos/{{taskId}}" },
+  result: { method: "GET", path: "/videos/{{taskId}}/content", headers: { Accept: "video/mp4" } },
+  response: asyncResponse("video", {
+    videos: coalesce(ref("response.metadata.url"), ref("response.data.metadata.url"), ref("response.url"), ref("response.video_url")),
+    errorPaths: ["error.code", "code"], messagePaths: ["error.message", "message"]
+  })
+});
+
+add({
   id: "rolldek-wan-video", providerId: "rolldek-wan-video", name: "RollDek WAN 3.0 Video", vendor: "RollDek", capability: "video",
   baseUrl: "https://rolldek.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
   notes: "该协议严格对应 RollDek WAN 3.0 的 JSON /v1/videos 合同。RollDek 同时暴露的其他兼容创建入口不共享任务查询路径，不能与 NewAPI Video Generations Channel 2 混用。",

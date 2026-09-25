@@ -58,6 +58,10 @@ func TestProviderMediaHydrationPolicyPrefersObjectURLs(t *testing.T) {
 	if bytesOnly.requireURL || bytesOnly.preferURL {
 		t.Fatalf("gemini image policy = %#v", bytesOnly)
 	}
+	twoHundredT := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: "200t-seedance-video"}})
+	if twoHundredT.requireURL || twoHundredT.preferURL {
+		t.Fatalf("200T Seedance policy = %#v; JSON references must stay data URLs", twoHundredT)
+	}
 	masked := providerMediaHydrationPolicyFor(context.Background(), canvasGenerationInput{Config: providerConfig{InterfaceType: string(model.ChannelInterfaceOpenAIImage)}, Mask: &providerMedia{ID: "mask"}})
 	if masked.requireURL || masked.preferURL {
 		t.Fatalf("openai mask policy = %#v", masked)
