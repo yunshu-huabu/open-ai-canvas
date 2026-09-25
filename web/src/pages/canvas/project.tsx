@@ -2603,6 +2603,7 @@ function InfiniteCanvasPage() {
                                         : undefined
                                 }
                                 onEnterFocusMode={enterFocusMode}
+                                onThemeChange={(nextTheme) => applyCanvasAppearance(canvasAppearanceForTheme(nextTheme, canvasAppearance))}
                                 shortDramaGuide={shortDramaGuide}
                             />
                         ) : null}

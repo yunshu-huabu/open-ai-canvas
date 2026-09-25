@@ -8,7 +8,7 @@
     container-type: inline-size;
 }
 @container (max-width: 1050px) {
-    .canvas-topbar-tools-cluster > :not(:has(.canvas-topbar-version-button)):not(.canvas-topbar-agent-button) {
+    .canvas-topbar-tools-cluster > :not(:has(.canvas-topbar-version-button)):not(:has(.canvas-topbar-theme-button)):not(.canvas-topbar-agent-button) {
         display: none !important;
     }
 }

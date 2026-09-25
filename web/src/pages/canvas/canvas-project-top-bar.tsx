@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, LoaderCircle, Menu, Pencil, Plus, Redo2, Save, Search, Share2, Trash2, Undo2, Upload } from "lucide-react";
+import { Clapperboard, CloudDownload, CloudUpload, CopyPlus, Focus, FolderKanban, Gauge, History, Home, LayoutGrid, LoaderCircle, Menu, Moon, Pencil, Plus, Redo2, Save, Search, Share2, Sun, Trash2, Undo2, Upload } from "lucide-react";
 import { Button, Dropdown, Tooltip } from "antd";
 
 import { WorkspaceCreditGiftMark } from "@/components/layout/workspace-credit-gift-mark";
+import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { useWalletBalance } from "@/hooks/use-wallet-balance";
 import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 import { canvasDockStyle } from "@/lib/canvas/canvas-aceternity-style";
 import type { CanvasContextSummary } from "@/lib/canvas/canvas-context-summary";
 import type { CanvasShortDramaProgress } from "@/lib/canvas/canvas-short-drama";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { canvasThemes, type CanvasColorTheme } from "@/lib/canvas-theme";
 import { useCanvasThemeStore } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import type { CanvasMediaPerformanceMode } from "@/types/canvas";
@@ -44,6 +45,7 @@ type CanvasTopBarProps = {
     onOpenSearch: () => void;
     projectContext?: CanvasContextSummary & { projectId: string; projectName: string };
     onEnterFocusMode: () => void;
+    onThemeChange: (theme: CanvasColorTheme) => void;
     shortDramaGuide?: { progress: CanvasShortDramaProgress; collapsed: boolean; onToggle: () => void };
 };
 
@@ -76,9 +78,11 @@ export function CanvasTopBar({
     onOpenSearch,
     projectContext,
     onEnterFocusMode,
+    onThemeChange,
     shortDramaGuide,
 }: CanvasTopBarProps) {
-    const theme = canvasThemes[useCanvasThemeStore((state) => state.theme)];
+    const colorTheme = useCanvasThemeStore((state) => state.theme);
+    const theme = canvasThemes[colorTheme];
     const dockStyle = canvasDockStyle(theme, theme.node.text);
     const user = useUserStore((state) => state.user);
     const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
@@ -254,6 +258,18 @@ export function CanvasTopBar({
                             </button>
                         </CanvasTopBarTooltip>
                     ) : null}
+                    <CanvasTopBarTooltip label={colorTheme === "dark" ? "切换浅色画布" : "切换深色画布"}>
+                        <AnimatedThemeToggler
+                            className="canvas-topbar-action canvas-topbar-theme-button grid size-10 place-items-center rounded-xl focus-visible:outline-none focus-visible:ring-2"
+                            style={{ color: theme.node.text }}
+                            theme={colorTheme}
+                            onThemeChange={onThemeChange}
+                            aria-label={colorTheme === "dark" ? "切换浅色画布" : "切换深色画布"}
+                            aria-pressed={colorTheme === "dark"}
+                        >
+                            {colorTheme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                        </AnimatedThemeToggler>
+                    </CanvasTopBarTooltip>
                     <CanvasTopBarTooltip label="进入专注模式（Shift + Ctrl/Cmd + F）">
                         <Button type="text" className="canvas-topbar-action !h-10 !w-10 !min-w-10 !rounded-xl !p-0" style={{ color: theme.node.text }} icon={<Focus className="size-4" />} onClick={onEnterFocusMode} aria-label="进入专注模式" />
                     </CanvasTopBarTooltip>

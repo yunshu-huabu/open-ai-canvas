@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { useThemeStore } from "../src/stores/use-theme-store";
 import { useCanvasThemeStore } from "../src/stores/canvas/use-canvas-theme-store";
+import { useCanvasStore } from "../src/stores/canvas/use-canvas-store";
 
 const workspaceBefore = useThemeStore.getState().theme;
 const canvasBefore = useCanvasThemeStore.getState().theme;
@@ -28,6 +29,18 @@ describe("canvas theme ownership", () => {
         useCanvasThemeStore.setState({ theme: "light" });
         useThemeStore.getState().setTheme("dark");
         expect(useCanvasThemeStore.getState().theme).toBe("light");
+    });
+    test("new canvases inherit the theme of their creation route", () => {
+        useThemeStore.setState({ theme: "light" });
+        useCanvasThemeStore.setState({ theme: "dark", active: false });
+        const lightId = useCanvasStore.getState().createProject("浅色画布");
+        expect(useCanvasStore.getState().openProject(lightId)?.appearance).toEqual({ mode: "light" });
+        expect(useCanvasThemeStore.getState().theme).toBe("light");
+
+        useCanvasThemeStore.setState({ theme: "dark", active: true });
+        const darkId = useCanvasStore.getState().createProject("深色画布");
+        expect(useCanvasStore.getState().openProject(darkId)?.appearance).toEqual({ mode: "dark" });
+        useCanvasStore.getState().deleteProjects([lightId, darkId]);
     });
     test("rejects malformed canvas themes", () => {
         useCanvasThemeStore.setState({ theme: "light", active: true });
