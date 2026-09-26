@@ -28,6 +28,16 @@ export type CreationAssetIdentity = {
     resultIndex?: number;
 };
 
+export function creationResultDisplayUrls(assets: Asset[], resultUrls: string[], resultAssetIds: string[]) {
+    if (resultUrls.length !== resultAssetIds.length) return resultUrls;
+    return resultUrls.map((url, index) => {
+        const asset = assets.find((candidate) => candidate.id === resultAssetIds[index]);
+        if (asset?.kind === "video") return resolveResourceUrl(asset.data.storageKey, asset.data.url) || url;
+        if (asset?.kind === "image") return resolveResourceUrl(asset.data.storageKey, asset.data.dataUrl || asset.coverUrl) || url;
+        return url;
+    });
+}
+
 export function creationUploadAccept(mode: CreationMode) {
     if (mode === "video") return "image/*,video/*,audio/*";
     if (mode === "text") return `image/*,video/*,audio/*,${textDocumentExtensions.join(",")}`;
