@@ -71,6 +71,7 @@ export default function AnalyticsPanel({ users, channels }: Props) {
             const analytics = await getAdminAnalytics(filters);
             if (sequence !== requestSequence.current) return;
             setData(analytics);
+            return true;
         } catch (error) {
             if (sequence !== requestSequence.current) return;
             const text = error instanceof Error ? error.message : "读取统计数据失败";
@@ -202,6 +203,12 @@ export default function AnalyticsPanel({ users, channels }: Props) {
     const openAnalysis = (tab: AnalysisTab) => {
         setAnalysisTab(tab);
         window.requestAnimationFrame(() => document.getElementById("admin-analytics-analysis")?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }));
+    };
+
+    const refreshQueue = () => {
+        void reload().then((updated) => {
+            if (updated) message.success("当前队列统计已刷新");
+        });
     };
 
     return (
@@ -419,6 +426,8 @@ export default function AnalyticsPanel({ users, channels }: Props) {
                             value={data ? formatNumber(data.kpi.currentQueuedTasks) : "--"}
                             description={!data ? "数据尚未就绪" : data.kpi.currentQueuedTasks ? "存在等待执行的生成任务" : "没有排队中的生成任务"}
                             tone={!data ? "neutral" : data.kpi.currentQueuedTasks ? "warning" : "success"}
+                            actionLabel="刷新当前队列统计"
+                            onClick={refreshQueue}
                         />
                         <AnalyticsAttentionItem
                             icon={<CircleDollarSign className="size-4" />}
@@ -511,7 +520,7 @@ function AnalyticsHealthCard({ icon, label, value, trend, detail, tone = "neutra
     );
 }
 
-function AnalyticsAttentionItem({ icon, label, value, description, tone = "neutral", onClick }: { icon: ReactNode; label: string; value: ReactNode; description: string; tone?: AdminStatusTone; onClick?: () => void }) {
+function AnalyticsAttentionItem({ icon, label, value, description, tone = "neutral", actionLabel, onClick }: { icon: ReactNode; label: string; value: ReactNode; description: string; tone?: AdminStatusTone; actionLabel?: string; onClick?: () => void }) {
     const content = (
         <>
             <span className="admin-analytics-attention-icon" aria-hidden="true">
@@ -526,7 +535,7 @@ function AnalyticsAttentionItem({ icon, label, value, description, tone = "neutr
     );
 
     return onClick ? (
-        <button type="button" className="admin-analytics-attention-item is-action" data-tone={tone} onClick={onClick}>
+        <button type="button" className="admin-analytics-attention-item is-action" data-tone={tone} aria-label={actionLabel || label} title={actionLabel} onClick={onClick}>
             {content}
         </button>
     ) : (

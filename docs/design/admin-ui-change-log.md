@@ -1218,3 +1218,14 @@
 - 具体改动：暗色回到 `#0f0f0f / #181818`，亮色回到 `#f5f5f5 / #ffffff`，仍写死在后台 token 里不读皮肤。分组标题取消圆点与渐隐短线；组内取消竖向连接线和缩进；当前页只保留底色，不再加描边和左侧指示条。
 - 验证：回归测试更新隔离色值与“无树状线”断言。
 - 逐项回滚：恢复本批上述文件即可。
+
+## 批次 141：运行总览当前队列点击反馈
+
+- 日期时间：2026-09-26 CST
+- 目的：修复运行总览“需要关注”中“当前队列”点击没有反应的问题。
+- 修改前状况：该行渲染为只读 `div`，只有异常请求和成本覆盖订单有点击动作；统计接口目前只提供实时队列数量，没有队列明细。
+- 涉及文件：`web/src/pages/admin/components/analytics-panel.tsx`、本记录、`docs/content/docs/progress/pending-test.mdx`。
+- 具体改动：将“当前队列”设为可聚焦按钮，点击后重新读取统计并显示刷新成功反馈；读取失败沿用现有错误提示。按钮名称和悬停提示说明动作为刷新队列统计。
+- 验证结果：`cd web && bun run typecheck` 通过；`bun test test/admin-ui-regressions.test.ts` 通过（17 项）；`git diff --check` 通过。尚未启动开发服务，登录态浏览器点击和键盘验收保留在 `pending-test.mdx`。
+- 潜在影响：点击会再次读取运行总览统计；不改变队列状态、统计口径和后端接口。
+- 逐项回滚：从 `.local/ui-change-backups/batch-141/` 逐文件恢复对应原始副本。修改前 SHA-256：`analytics-panel.tsx` 为 `728BC7C23BEC27DCD210F68847826228ACB99F2D88F59518974C1D0357377CD4`，本记录为 `945D7DD46E725330EC75D33CCA8101DC96498BF60150306544AE5B719E37169E`，`pending-test.mdx` 为 `761DEC93A68126B3989D50108BB249276191F43AC19A7CF18DD913EE21FC1963`。
