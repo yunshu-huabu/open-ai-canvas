@@ -41,3 +41,15 @@ test("刷新后创作视频使用持久资源地址，不继续使用旧的临�
     assert.deepEqual(creationResultDisplayUrls(assets, resultUrls, assetIds), ["/api/resources/video-1/file", "blob:current-session"]);
     assert.deepEqual(creationResultDisplayUrls(assets, resultUrls, ["remote"]), resultUrls);
 });
+
+test("刷新后创作图片使用持久资源地址和当前会话的本地预览地址", () => {
+    const assets = [
+        { id: "remote", kind: "image", metadata: { source: "generation-task", messageId: "message-2", taskId: "task-3", outputIndex: 0 }, data: { storageKey: "resource:image-1", dataUrl: "https://expired.example/image.png" } },
+        { id: "local", kind: "image", metadata: { source: "generation-task", messageId: "message-2", taskId: "task-4", outputIndex: 0 }, data: { storageKey: "generation-image:user:image-2", dataUrl: "blob:current-image" } },
+    ] as unknown as Asset[];
+    const resultUrls = ["https://expired.example/image.png", "blob:previous-image"];
+    const assetIds = creationResultAssetIds(assets, { messageId: "message-2", taskIds: ["task-3", "task-4"], resultUrls });
+
+    assert.deepEqual(assetIds, ["remote", "local"]);
+    assert.deepEqual(creationResultDisplayUrls(assets, resultUrls, assetIds), ["/api/resources/image-1/file", "blob:current-image"]);
+});
