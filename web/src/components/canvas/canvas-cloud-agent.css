@@ -1066,6 +1066,11 @@
     line-height: 1;
 }
 
+.agent-message-mention > span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
 .agent-message-node-link {
     display: inline-flex;
     max-width: min(100%, 300px);
