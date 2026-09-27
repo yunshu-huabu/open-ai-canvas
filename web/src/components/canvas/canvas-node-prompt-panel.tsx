@@ -1,4 +1,4 @@
-import { Button, Image as AntImage, InputNumber, Modal, Popover } from "antd";
+import { App, Button, Image as AntImage, InputNumber, Modal, Popover } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ArrowLeftRight, ArrowUp, AtSign, Boxes, ChevronDown, FileText, GripVertical, ImageIcon, ImagePlus, LayoutList, Link2, LoaderCircle, Maximize2, Music2, Pencil, SlidersHorizontal, UserRound, Video, WandSparkles, X } from "lucide-react";
@@ -36,6 +36,7 @@ import { createPluginHostContext } from "@/services/plugin-host";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { useResolvedCanvasResourceReferences } from "./use-resolved-canvas-resource-references";
 import { quoteModel, type LogicalModelQuote } from "@/services/api/logical-models";
+import { resolveImageUrl } from "@/services/image-storage";
 
 export type CanvasNodeGenerationMode = CanvasGenerationMode;
 
@@ -753,8 +754,9 @@ function ConnectedReferenceShelf({
     onReplaceReference?: (oldReference: CanvasResourceReference, sourceNodeId: string) => void;
     onReplaceReferenceFiles?: (oldReference: CanvasResourceReference, files: File[]) => void;
 }) {
+    const { message } = App.useApp();
     const activeReferences = references.filter((item) => item.active && item.kind !== "skill" && item.kind !== "tool");
-    const [imagePreview, setImagePreview] = useState<CanvasResourceReference | null>(null);
+    const [imagePreview, setImagePreview] = useState<{ reference: CanvasResourceReference; url: string } | null>(null);
     const [draggedReferenceId, setDraggedReferenceId] = useState<string | null>(null);
     const [dropTargetReferenceId, setDropTargetReferenceId] = useState<string | null>(null);
     if (!activeReferences.length) return null;
@@ -881,7 +883,14 @@ function ConnectedReferenceShelf({
                                     style={{ background: theme.toolbar.itemHover, color: theme.node.text, outlineColor: theme.node.activeStroke }}
                                     title={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
                                     aria-label={canPreview ? `预览 ${reference.title}` : `插入 @${reference.label}`}
-                                    onClick={() => (canPreview ? setImagePreview(reference) : onInsert(reference))}
+                                    onClick={() => {
+                                        if (!canPreview) return onInsert(reference);
+                                        const storageKey = reference.kind === "video" ? reference.previewStorageKey : reference.storageKey;
+                                        void resolveImageUrl(storageKey, reference.previewUrl).then((url) => {
+                                            if (url) setImagePreview({ reference, url });
+                                            else message.error("参考图暂时无法显示");
+                                        }).catch(() => message.error("参考图暂时无法显示"));
+                                    }}
                                 >
                                     <ReferenceThumbnail reference={reference} />
                                     {canPreview ? (
@@ -915,10 +924,10 @@ function ConnectedReferenceShelf({
                     })}
                 </div>
             </div>
-            {imagePreview?.previewUrl ? (
+            {imagePreview ? (
                 <AntImage
-                    src={imagePreview.previewUrl}
-                    alt={imagePreview.title || imagePreview.label}
+                    src={imagePreview.url}
+                    alt={imagePreview.reference.title || imagePreview.reference.label}
                     style={{ display: "none" }}
                     preview={{
                         open: true,
