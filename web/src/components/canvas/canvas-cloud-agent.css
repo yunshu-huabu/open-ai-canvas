@@ -1047,16 +1047,16 @@
     display: inline-flex;
     max-width: 100%;
     align-items: center;
-    gap: 4px;
-    margin-inline: 2px;
-    border: 1px solid color-mix(in srgb, var(--workspace-accent) 30%, transparent);
+    gap: 3px;
+    margin-inline: 1px;
+    border: 1px solid color-mix(in srgb, var(--workspace-accent) 15%, transparent);
     border-radius: 6px;
-    background: color-mix(in srgb, var(--workspace-accent) 10%, transparent);
-    padding: 2px 6px;
+    background: color-mix(in srgb, var(--workspace-accent) 5%, transparent);
+    padding: 1px 4px;
     color: var(--workspace-accent);
-    font-size: 0.88em;
-    font-weight: 550;
-    line-height: 1.2;
+    font-size: var(--fs-label);
+    font-weight: 400;
+    line-height: 1.35;
     vertical-align: baseline;
 }
 

@@ -944,12 +944,15 @@ func (s *Service) advanceCloudAgents() {
 	}
 	for i := range runs {
 		s.agentSchedulerCursor = runs[i].ID
-		if s.terminateStuckCloudAgent(&runs[i]) {
-			continue
-		}
 		err = s.advanceCloudAgent(&runs[i])
 		if err == nil {
 			s.clearCloudAgentSchedulerConflict(runs[i].ID)
+			if time.Since(runs[i].UpdatedAt) >= cloudAgentStuckAfter {
+				current, lookupErr := s.repo.CloudAgent(runs[i].UserID, runs[i].ID)
+				if lookupErr == nil {
+					s.terminateStuckCloudAgent(current)
+				}
+			}
 			continue
 		}
 		if errors.Is(err, repository.ErrCreationConflict) {
@@ -957,6 +960,7 @@ func (s *Service) advanceCloudAgents() {
 			continue
 		}
 		log.Printf("agent transition %s: %v", runs[i].ID, err)
+		s.terminateStuckCloudAgent(&runs[i])
 	}
 }
 
@@ -1700,6 +1704,9 @@ func (s *Service) advanceCloudAgentTool(run *model.CloudAgentExecution, state *c
 	}
 	allowed := cloudAgentToolAllowed(state.Request, call.Function.Name)
 	mediaTool := call.Function.Name == "generate_media" || call.Function.Name == "image_layer_split"
+	if allowed && mediaTool && state.MediaTaskID != "" {
+		return s.advanceCloudAgentMedia(run, state, cloudAgentMediaCall(call))
+	}
 	if allowed && cloudAgentWrite(call.Function.Name) && (state.Request.PermissionMode == "request_approval" || mediaTool) && state.Approval == nil {
 		var plan *cloudAgentMediaPlan
 		var modelName string

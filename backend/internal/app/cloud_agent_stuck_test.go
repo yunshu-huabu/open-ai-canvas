@@ -118,6 +118,88 @@ func TestStuckDetectionTreatsTerminalTaskAsIdle(t *testing.T) {
 	}
 }
 
+func TestSchedulerReportsCompletedTaskBeforeStuckCleanup(t *testing.T) {
+	s, db, root := reliableAgentRoot(t)
+	run, err := s.repo.CloudAgent("user", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.event(run.ID, "assistant_message", map[string]any{"text": "处理中"})
+	state.Events[len(state.Events)-1].CreatedAt = time.Now().Add(-10 * time.Minute)
+	if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Task{}).Where("id = ?", root.ID).Updates(map[string]any{
+		"status": model.TaskStatusSucceeded, "result_json": `{"text":"任务已完成"}`,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", run.ID).Update("updated_at", time.Now().Add(-10*time.Minute)).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.advanceCloudAgents()
+	run, err = s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := state.Events[len(state.Events)-1]
+	if run.Status != "completed" || run.FailureMessage != "" || last.Type != "assistant_message" {
+		t.Fatalf("已完成任务应先回报结果，实际 status=%s failure=%q last=%s", run.Status, run.FailureMessage, state.Events[len(state.Events)-1].Type)
+	}
+	if last.Payload["text"] != "任务已完成" {
+		t.Fatal("助手没有返回已完成任务的正文")
+	}
+}
+
+func TestSchedulerContinuesAfterMediaWritebackBeforeStuckCleanup(t *testing.T) {
+	s, db, args := agentMediaFixture(t)
+	run, _ := agentMediaRun(t, s, args, "auto", "stale-media-writeback")
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, state := agentInterjectionState(t, s, run.ID)
+	if state.MediaTaskID == "" {
+		t.Fatal("媒体任务未提交")
+	}
+	if err := db.Create(&model.Resource{ID: "stale-output", UserID: "user", Kind: "video", Status: "ready", MimeType: "video/mp4"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.Task{}).Where("id = ?", state.MediaTaskID).Updates(map[string]any{
+		"status": model.TaskStatusSucceeded, "result_json": `{"mode":"video","video":{"storageKey":"resource:stale-output"}}`,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, state = agentInterjectionState(t, s, run.ID)
+	state.event(run.ID, "assistant_message", map[string]any{"text": "等待汇报"})
+	state.Events[len(state.Events)-1].CreatedAt = time.Now().Add(-10 * time.Minute)
+	if err := s.repo.MutateCloudAgent("user", run.ID, run.Revision, func(current *model.CloudAgentExecution, _ *repository.Repository) error {
+		return cloudAgentSave(current, &state)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.CloudAgentExecution{}).Where("id = ?", run.ID).Update("updated_at", time.Now().Add(-10*time.Minute)).Error; err != nil {
+		t.Fatal(err)
+	}
+	s.advanceCloudAgents()
+	run, state = agentInterjectionState(t, s, run.ID)
+	if run.Status != "running" || run.FailureMessage != "" || state.ActiveTaskID == "" {
+		t.Fatalf("媒体回写后应继续生成完成汇报，实际 status=%s failure=%q active=%q", run.Status, run.FailureMessage, state.ActiveTaskID)
+	}
+}
+
 func TestFailCloudAgentPersistsFailureMessage(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	if sqlDB, err := db.DB(); err == nil {
