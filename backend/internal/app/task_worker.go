@@ -53,25 +53,6 @@ func (w *taskWorkerCoordinator) start(ctx context.Context) {
 	s.startBillingReviewAudit(ctx)
 	s.startAgentMemoryCompactScheduler()
 	s.runWorkerLoop(func(ctx context.Context) {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			if !s.IsDraining() {
-				s.advanceCloudAgents()
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-s.agentSchedulerWake:
-				continue
-			case <-ticker.C:
-			}
-		}
-	})
-	s.runWorkerLoop(func(ctx context.Context) {
 		slots := make(chan struct{}, maxChannelConcurrencyLimit)
 		dispatch := func() {
 			if ctx.Err() != nil || s.IsDraining() {
@@ -149,9 +130,6 @@ func (w *taskWorkerCoordinator) processNextTask() error {
 
 func (w *taskWorkerCoordinator) processClaimedTask(task *model.Task, globalSlot *platform.SlotLease) error {
 	s := w.service
-	if task != nil && task.Operation == cloudAgentStepOperation {
-		defer s.wakeCloudAgentScheduler()
-	}
 	terminal := s.terminalCoordinator()
 	policyCtx, cancelPolicy := context.WithTimeout(context.Background(), 3*time.Second)
 	reader := &Service{repo: s.repo.WithContext(policyCtx)}
@@ -339,7 +317,11 @@ func taskFailureMessage(err error) string {
 	if err == nil {
 		return "任务处理失败"
 	}
-	return truncateRunes(err.Error(), 2_000)
+	message := err.Error()
+	if denied := speechResourceDeniedUserMessage(message); denied != "" {
+		return denied
+	}
+	return truncateRunes(message, 2_000)
 }
 
 // taskLeaseRenewContext 给续租单独一份"不继承父 context 取消/时限"的上下文（仅 5 秒上限）。

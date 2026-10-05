@@ -1229,3 +1229,8 @@
 - 验证结果：`cd web && bun run typecheck` 通过；`bun test test/admin-ui-regressions.test.ts` 通过（17 项）；`git diff --check` 通过。尚未启动开发服务，登录态浏览器点击和键盘验收保留在 `pending-test.mdx`。
 - 潜在影响：点击会再次读取运行总览统计；不改变队列状态、统计口径和后端接口。
 - 逐项回滚：从 `.local/ui-change-backups/batch-141/` 逐文件恢复对应原始副本。修改前 SHA-256：`analytics-panel.tsx` 为 `728BC7C23BEC27DCD210F68847826228ACB99F2D88F59518974C1D0357377CD4`，本记录为 `945D7DD46E725330EC75D33CCA8101DC96498BF60150306544AE5B719E37169E`，`pending-test.mdx` 为 `761DEC93A68126B3989D50108BB249276191F43AC19A7CF18DD913EE21FC1963`。
+## 自定义更新公告页签
+
+- 在“画布配置”后新增“更新公告”，沿用统一保存、刷新、撤销和离开保护。
+- 支持开关、多版本内容块、整行／半行布局和实时预览；后台颜色使用既有独立 token，窄屏单列。
+- 沿用既有外观配置 JSON 存储，无新增数据库表；公告草稿与当前站点构建版本分别管理。

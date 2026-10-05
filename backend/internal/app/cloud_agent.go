@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -371,7 +371,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if state.Fingerprint == "" || state.Fingerprint != fingerprint {
 			return nil, kernel.NewAppError(409, "幂等键已用于不同请求，请使用新的幂等键")
 		}
-		return s.CloudAgentRun(userID, existing.ID)
+		run, runErr := s.CloudAgentRun(userID, existing.ID)
+		if runErr == nil && !cloudAgentRunTerminal(run.Status) {
+			s.startCloudAgentPi(userID, existing.ID)
+		}
+		return run, runErr
 	} else {
 		var appErr *AppError
 		if !errors.As(lookupErr, &appErr) || appErr.Status != 404 {
@@ -391,13 +395,7 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		if parent.ProjectID != req.CanvasID {
 			return nil, kernel.Forbidden("不能跨画布追加 Agent 消息")
 		}
-		if parent.Status == model.TaskStatusQueued || parent.Status == model.TaskStatusRunning {
-			return nil, kernel.NewAppError(409, "上一轮仍在执行，请等待结束")
-		}
 		superseded := s.cloudAgentParentCanBeSuperseded(userID, parentID)
-		if err := s.advanceCloudAgentByID(userID, parentID); err != nil {
-			return nil, err
-		}
 		// 续轮收束要读上一轮**全部**事件（运行详情默认只返回尾部一窗）：长会话一旦被截断，
 		// 新轮就看不到上一轮改过哪些节点、提交过哪些任务，表现为"忘了自己做过什么"。
 		parentRun, err := s.CloudAgentRun(userID, parentID, CloudAgentRunViewOptions{EventLimit: cloudAgentContinuationEventLimit})
@@ -405,13 +403,16 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			return nil, err
 		}
 		if superseded {
-			log.Printf("agent run %s cannot resume after a contract change; continuing in a new turn", parentID)
+			slog.Info("agent run cannot resume after a contract change; continuing in a new turn", "run", parentID)
 		} else if !cloudAgentRunTerminal(parentRun.Status) || parentRun.CleanupPending {
 			return nil, kernel.NewAppError(409, "上一轮 Agent 尚未结束")
 		}
 		parentExecution, err := s.repo.CloudAgent(userID, parentID)
 		if err != nil {
 			return nil, err
+		}
+		if !cloudAgentRunTerminal(parentExecution.Status) || parentExecution.CleanupPending {
+			return nil, kernel.NewAppError(409, "上一轮仍在执行，请等待结束")
 		}
 		parentState, err := cloudAgentDecode(parentExecution)
 		if err != nil {
@@ -474,7 +475,11 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 	}
 	// The policy prompt is the stable provider-cache prefix. Canvas contents are
 	// dynamic run data and must not be embedded in that prefix.
-	system, policy, err := compileCloudAgentPolicies(req, skillSnapshots, "", profile, creativeAnchor)
+	_, appearance, err := s.readAppearance()
+	if err != nil {
+		return nil, err
+	}
+	system, policy, err := compileCloudAgentPolicies(req, appearance.Canvas.AgentName, skillSnapshots, "", profile, creativeAnchor)
 	if err != nil {
 		return nil, err
 	}
@@ -493,17 +498,19 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 		canonical.Messages = append(append([]map[string]any{}, canonical.Messages[:len(canonical.Messages)-1]...), catalog, last)
 	}
 	s.attachCloudAgentLessons(&canonical, userID, req.Prompt)
-	// 必须登记进 state.Policy（值拷贝）：state 才是随任务持久化、被运行期读取的那份，
-	// 在这里改局部 policy 不会生效。登记之后压力读数的"系统提示分段"才能把 memory 摊开，
-	// 并与 system 桶合计对齐。
-	cloudAgentRecordMemorySegment(&state.Policy, canonical.SystemPrompt)
 	canonical.PromptCacheKey = cloudAgentPromptCacheKeyForRequest(req.CanvasID, cloudAgentPromptCacheIdentity(req, policy), canonical.SystemPrompt, canonical.Tools)
 	attachCloudAgentPlan(&canonical, inheritedPlan)
 	input := map[string]any{"mode": "text", "prompt": req.Prompt, "textHistory": history, "textOptions": map[string]any{"stream": true, "thinking": cloudAgentReasoningEnabled(policy.ReasoningMode)}, "cloudAgent": state,
 		"agentRequests": map[string]any{"canonical": canonical},
 		"config":        map[string]any{"channelId": req.ChannelID, "channelModelKey": req.ChannelModelKey, "model": firstNonEmpty(req.ChannelModelKey, req.Model), "systemPrompt": system}}
+	input["piSessionJSONL"] = ""
+	if parentID != "" {
+		if session, sessionErr := s.repo.CloudAgentPiSession(userID, parentID); sessionErr == nil {
+			input["piSessionJSONL"] = session.SessionJSONL
+		}
+	}
 	task, err := s.CreateTask(userID, CreateTaskRequest{ProjectID: req.CanvasID, Type: "canvas_text", Operation: cloudAgentOperation, Prompt: req.Prompt, Model: req.Model, LogicalModelID: req.LogicalModelID, Input: input,
-		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale)))}})
+		admission: &taskAdmission{ID: id, MaxCharge: int64(math.Floor(req.Budget.MaxCredits * float64(CreditScale))), NonBillable: true}})
 	if err != nil {
 		// A concurrent identical request may have won the transaction. Never
 		// replace its result or reserve credits a second time.
@@ -511,11 +518,20 @@ func (s *Service) CreateCloudAgentRun(userID string, req CloudAgentRequest, pare
 			if stored.Fingerprint == "" || stored.Fingerprint != fingerprint {
 				return nil, kernel.NewAppError(409, "幂等键已用于不同请求")
 			}
-			return s.CloudAgentRun(userID, existing.ID)
+			run, runErr := s.CloudAgentRun(userID, existing.ID)
+			if runErr == nil && !cloudAgentRunTerminal(run.Status) {
+				s.startCloudAgentPi(userID, existing.ID)
+			}
+			return run, runErr
 		}
 		return nil, err
 	}
-	return s.CloudAgentRun(userID, task.ID)
+	run, err := s.CloudAgentRun(userID, task.ID)
+	if err != nil {
+		return nil, err
+	}
+	s.startCloudAgentPi(userID, task.ID)
+	return run, nil
 }
 
 // 旧运行记录没有单独保存历史；只从模型请求中当前用户消息之前的严格交替前缀恢复。
@@ -596,9 +612,13 @@ const (
 func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string) (string, error) {
 	var payload struct {
 		Nodes []struct {
-			ID    string `json:"id"`
-			Type  string `json:"type"`
-			Title string `json:"title"`
+			ID       string `json:"id"`
+			Type     string `json:"type"`
+			Title    string `json:"title"`
+			Metadata struct {
+				WorkflowKind     string `json:"workflowKind"`
+				CharacterAssetID string `json:"characterAssetId"`
+			} `json:"metadata"`
 		} `json:"nodes"`
 		Connections []struct {
 			FromNodeID string `json:"fromNodeId"`
@@ -643,9 +663,13 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string
 		}
 	}
 	candidates := make([]struct {
-		ID    string `json:"id"`
-		Type  string `json:"type"`
-		Title string `json:"title"`
+		ID       string `json:"id"`
+		Type     string `json:"type"`
+		Title    string `json:"title"`
+		Metadata struct {
+			WorkflowKind     string `json:"workflowKind"`
+			CharacterAssetID string `json:"characterAssetId"`
+		} `json:"metadata"`
 	}, 0, len(payload.Nodes))
 	if len(focus) > 0 {
 		// Always retain explicitly selected nodes before neighbors when a highly
@@ -669,7 +693,10 @@ func cloudAgentCanvasSummary(canvas *model.CanvasProject, focusNodeIDs ...string
 			break
 		}
 		item := map[string]any{"id": truncateRunes(node.ID, 100), "type": truncateRunes(node.Type, 40), "title": truncateRunes(node.Title, 80)}
-		if _, known := cloudAgentNodeCapabilityForType(node.Type); !known {
+		if node.Type == "text" && node.Metadata.WorkflowKind == "character" {
+			item["kind"] = "character"
+		}
+		if _, known := canvasCapabilityRegistry.ResolveNode(node.Type, node.Metadata.WorkflowKind); !known {
 			item["agentSupported"] = false
 		}
 		nodes = append(nodes, item)

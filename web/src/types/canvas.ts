@@ -295,7 +295,19 @@ export type CanvasNodeMetadata = {
     audioVoice?: string;
     audioFormat?: string;
     audioSpeed?: string;
+    audioLanguage?: string;
+    audioDialect?: string;
     audioInstructions?: string;
+    audioEmotionControlMethod?: string;
+    audioEmotionRandom?: string;
+    audioEmotionHappy?: string;
+    audioEmotionAngry?: string;
+    audioEmotionSad?: string;
+    audioEmotionAfraid?: string;
+    audioEmotionDisgusted?: string;
+    audioEmotionMelancholic?: string;
+    audioEmotionSurprised?: string;
+    audioEmotionCalm?: string;
     references?: string[];
     naturalWidth?: number;
     naturalHeight?: number;
@@ -378,6 +390,7 @@ export type CanvasNodeMetadata = {
     taskCreatedAt?: string;
     taskUpdatedAt?: string;
     generationEffectKeys?: string[];
+    generationOutputCount?: number;
     agentGenerationContinuation?: {
         id: string;
         taskId: string;

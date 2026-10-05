@@ -28,6 +28,31 @@ var cloudAgentStructuredProjectors = map[string]cloudAgentStructuredProjector{
 	},
 }
 
+// cloudAgentNodeHash 是单个节点内容的版本号。分镜/批量表的读写只作用在一个节点上，
+// 用它做并发校验：用户删改其它节点不会让 Agent 对这个节点的修改失效；
+// 这个节点本身被改过（或被删掉）时才拒绝写入。
+func cloudAgentNodeHash(doc map[string]any, nodeID string) string {
+	for _, node := range creationMaps(doc["nodes"]) {
+		if stringValue(node["id"]) == nodeID {
+			return creationHash(node)
+		}
+	}
+	return ""
+}
+
+// cloudAgentNodeSnapshotMatches 接受两种版本号：旧的整画布哈希（画布完全未变）或
+// 目标节点哈希（只有目标节点未变）。前者兼容已经发出、带整画布哈希的调用。
+func cloudAgentNodeSnapshotMatches(doc map[string]any, nodeID, snapshotHash string) bool {
+	if snapshotHash == "" {
+		return false
+	}
+	if snapshotHash == cloudAgentCanvasHash(doc) {
+		return true
+	}
+	node := cloudAgentNodeHash(doc, nodeID)
+	return node != "" && node == snapshotHash
+}
+
 // Viewport autosaves must not invalidate approved content; node edits still do.
 func cloudAgentCanvasHash(doc map[string]any) string {
 	content := make(map[string]any, len(doc))
@@ -183,7 +208,7 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 			candidateNodes = append(candidateNodes, node)
 		}
 	}
-	limit := 2000
+	limit := 320
 	if len(ids) > 0 || len(focus) > 0 {
 		limit = 16000
 	}
@@ -223,7 +248,7 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 		if status, ok := meta["status"].(string); ok {
 			item["status"] = truncateRunes(status, 40)
 		}
-		capability, known := cloudAgentNodeCapabilityForType(stringValue(node["type"]))
+		capability, known := cloudAgentNodeCapabilityForNode(node)
 		if !known {
 			// Read visibility is not permission to mutate or use a node as a media reference.
 			item["agentSupported"] = false
@@ -238,6 +263,10 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 			included[id] = true
 			continue
 		}
+		if capability.Variant != nil {
+			// 变体节点（如角色卡）底层 type 仍是 text，用 kind 标明真实能力，避免当普通文本处理。
+			item["kind"] = capability.Type
+		}
 		fields := capability.SummaryFields
 		if precise {
 			fields = capability.DetailFields
@@ -248,6 +277,35 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 		}
 		for key, value := range projected {
 			item[key] = value
+		}
+		if cloudAgentCharacterNode(node) {
+			if repo == nil {
+				item["character"] = map[string]any{"available": false, "issue": "角色资产读取服务不可用"}
+			} else {
+				canvas, canvasErr := repo.CanvasProjectForUser(userID, canvasID)
+				if canvasErr != nil {
+					return nil, canvasErr
+				}
+				character, characterErr := cloudAgentResolveCharacter(repo, userID, canvas.ProjectID, node)
+				if characterErr != nil {
+					item["character"] = map[string]any{"available": false, "issue": cloudAgentSafeToolError(characterErr)}
+				} else {
+					characterView := character.read(precise)
+					if precise {
+						_, referenceErr := cloudAgentCharacterImageReference(repo, userID, id, character)
+						characterView["imageReference"] = map[string]any{"ready": referenceErr == nil}
+						if referenceErr != nil {
+							characterView["imageReference"].(map[string]any)["issue"] = cloudAgentSafeToolError(referenceErr)
+						}
+						_, audioErr := cloudAgentCharacterAudioReference(repo, userID, id, character)
+						characterView["audioReference"] = map[string]any{"ready": audioErr == nil}
+						if audioErr != nil {
+							characterView["audioReference"].(map[string]any)["issue"] = cloudAgentSafeToolError(audioErr)
+						}
+					}
+					item["character"] = characterView
+				}
+			}
 		}
 		if capability.GenerationMode != "" {
 			generation := map[string]any{"taskStatus": "not_submitted"}
@@ -279,7 +337,8 @@ func cloudAgentCanvasStateSelected(repo *repository.Repository, userID, canvasID
 			}
 			item["generationDraft"] = draft
 		}
-		if capability.Connection.CanReference {
+		// 角色卡的引用可用性在 character.imageReference/audioReference 中给出。
+		if capability.Connection.CanReference && !cloudAgentCharacterNode(node) {
 			ref, _, err := cloudAgentReference(repo, userID, node)
 			outputReference := map[string]any{"ready": err == nil}
 			item["outputReference"] = outputReference
@@ -381,9 +440,15 @@ func cloudAgentProjectNodeFields(node, meta map[string]any, descriptor capabilit
 			}
 			continue
 		}
-		value, ok := node[key]
-		if !ok {
-			value, ok = meta[key]
+		var value any
+		var ok bool
+		if key == "prompt" && descriptor.GenerationMode != "" {
+			value, ok = cloudAgentMediaPrompt(meta)
+		} else {
+			value, ok = node[key]
+			if !ok {
+				value, ok = meta[key]
+			}
 		}
 		if !ok || (key == "content" && descriptor.GenerationMode != "") {
 			continue
@@ -396,6 +461,21 @@ func cloudAgentProjectNodeFields(node, meta map[string]any, descriptor capabilit
 		}
 	}
 	return projected, nil
+}
+
+func cloudAgentMediaPrompt(meta map[string]any) (string, bool) {
+	if generationSpec, ok := meta["generationSpec"].(map[string]any); ok {
+		if prompt, ok := generationSpec["prompt"].(string); ok {
+			return prompt, true
+		}
+	}
+	if prompt, ok := meta["composerContent"].(string); ok {
+		return prompt, true
+	}
+	if prompt, ok := meta["prompt"].(string); ok {
+		return prompt, true
+	}
+	return "", false
 }
 
 func cloudAgentProjectionValue(node, meta map[string]any, path string) (any, bool) {

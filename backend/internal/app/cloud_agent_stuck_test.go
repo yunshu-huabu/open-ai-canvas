@@ -163,11 +163,12 @@ func TestSchedulerReportsCompletedTaskBeforeStuckCleanup(t *testing.T) {
 
 func TestSchedulerContinuesAfterMediaWritebackBeforeStuckCleanup(t *testing.T) {
 	s, db, args := agentMediaFixture(t)
-	run, _ := agentMediaRun(t, s, args, "auto", "stale-media-writeback")
-	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+	run, state := agentMediaRun(t, s, args, "auto", "stale-media-writeback")
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
 		t.Fatal(err)
 	}
-	run, state := agentInterjectionState(t, s, run.ID)
+	approveAgentMediaDraft(t, s, run.ID)
+	run, state = agentInterjectionState(t, s, run.ID)
 	if state.MediaTaskID == "" {
 		t.Fatal("媒体任务未提交")
 	}
