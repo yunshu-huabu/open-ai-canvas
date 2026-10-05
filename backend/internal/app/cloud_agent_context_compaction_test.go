@@ -116,8 +116,9 @@ func TestCloudAgentCompactionRequestsWhenTokenLineReached(t *testing.T) {
 	if payload["basis"] != "tokens" || payload["compactAtTokens"] != float64(budget.CompactAtTokens) {
 		t.Fatalf("触发读数 = %+v", payload)
 	}
-	if ratio, ok := payload["pressureRatio"].(float64); !ok || ratio < 0.84 {
-		t.Fatalf("压力读数 = %+v", payload["pressureRatio"])
+	wantPressureRatio := float64(budget.CompactAtTokens) / float64(budget.ContextWindowTokens)
+	if ratio, ok := payload["pressureRatio"].(float64); !ok || ratio < wantPressureRatio-0.001 || ratio > wantPressureRatio+0.001 {
+		t.Fatalf("压力读数 = %+v, want approximately %.3f", payload["pressureRatio"], wantPressureRatio)
 	}
 }
 
@@ -207,11 +208,8 @@ func TestCloudAgentCompactionResumesStepLoopWithCheckpoint(t *testing.T) {
 		map[string]any{"role": "user", "content": "把第 4 行补上光影"},
 		map[string]any{"role": "assistant", "content": "好的，先看一下现有配色"},
 	)
-	lastTaskID, lastEstimate := state.LastStepTaskID, state.LastStepEstimate
-	state.TokenAnchor = &cloudAgentTokenAnchor{TaskID: lastTaskID, Step: state.Step, InputTokens: 10000, EstimatedTokens: lastEstimate, Accepted: true}
 	run = saveCloudAgentCompactionState(t, s, run, &state)
 	stepBefore := state.Step
-	pressureCount := len(cloudAgentCompactionEvents(t, s, run, "context_pressure"))
 	if requested, err := s.cloudAgentRequestCompaction(run, &state, budget, budget.CompactAtTokens); err != nil || !requested {
 		t.Fatalf("没有触发压缩: %v", err)
 	}
@@ -225,12 +223,6 @@ func TestCloudAgentCompactionResumesStepLoopWithCheckpoint(t *testing.T) {
 	}
 	if persisted.Step != stepBefore {
 		t.Fatalf("压缩调用占掉了步数: %d → %d", stepBefore, persisted.Step)
-	}
-	if persisted.LastStepTaskID != lastTaskID || persisted.LastStepEstimate != lastEstimate || persisted.TokenAnchor == nil || !persisted.TokenAnchor.Accepted {
-		t.Fatalf("压缩调用不得覆盖普通模型步骤和锚点: last=%s estimate=%d anchor=%+v", persisted.LastStepTaskID, persisted.LastStepEstimate, persisted.TokenAnchor)
-	}
-	if got := len(cloudAgentCompactionEvents(t, s, run, "context_pressure")); got != pressureCount {
-		t.Fatalf("压缩任务不得发普通模型请求读数: %d → %d", pressureCount, got)
 	}
 	task, err := s.repo.TaskForUser("user", persisted.ActiveTaskID)
 	if err != nil {

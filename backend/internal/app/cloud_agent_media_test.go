@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -230,6 +231,68 @@ func TestCloudAgentMediaReferenceAndSnapshotGuards(t *testing.T) {
 	}
 }
 
+func TestCloudAgentMediaArgumentFailureContinuesRun(t *testing.T) {
+	s, db, args := agentMediaFixture(t)
+	args.SourceNodeID = "cat" // Existing media node, invalid as a text source.
+	args.ReferenceNodeIDs = []string{"hero"}
+	run, state := agentMediaRun(t, s, args, "request_approval")
+	if err := s.advanceCloudAgentTool(run, &state); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.repo.CloudAgent("user", run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = cloudAgentDecode(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != "running" {
+		t.Fatalf("repairable media argument failure terminated run: status=%s message=%s", stored.Status, stored.FailureMessage)
+	}
+	var failed *CloudAgentEvent
+	for i := range state.Events {
+		if state.Events[i].Type == "tool_failed" {
+			failed = &state.Events[i]
+		}
+		if state.Events[i].Type == "run_failed" {
+			t.Fatalf("argument error emitted run_failed: %+v", state.Events[i])
+		}
+	}
+	if failed == nil {
+		t.Fatal("missing tool_failed event")
+	}
+	result, _ := failed.Payload["result"].(map[string]any)
+	if result["field"] != "sourceNodeId" || result["issue"] != "invalid_value" || result["requiredAction"] != "fix_arguments" {
+		t.Fatalf("missing actionable field feedback: %+v", result)
+	}
+	var tasks int64
+	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
+		t.Fatal(err)
+	}
+	if tasks != 0 {
+		t.Fatalf("invalid arguments submitted %d media tasks", tasks)
+	}
+}
+
+func TestCloudAgentUnavailableTransientReferenceIsNotRetryable(t *testing.T) {
+	s, _, args := agentMediaFixture(t)
+	args.ReferenceNodeIDs = nil
+	args.ReferenceTransientIDs = []string{"missing-transient"}
+	_, _, _, err := cloudAgentMediaDocument(s.repo, "user", "agent-canvas", args, map[string]cloudAgentTransientReference{})
+	if err == nil {
+		t.Fatal("missing transient reference was accepted")
+	}
+	var argumentErr *cloudAgentArgumentError
+	if errors.As(err, &argumentErr) {
+		t.Fatalf("unavailable transient reference was classified as a model-correctable argument: %v", err)
+	}
+	class, retryable, action := cloudAgentToolErrorClass(agentTestRequest(), agentMediaCall(args), cloudAgentWrapMediaAdmissionError(err), true)
+	if class != cloudAgentToolErrorAdmission || retryable || action != "report_to_user" {
+		t.Fatalf("unavailable transient reference entered correction retry: class=%s retryable=%v action=%s", class, retryable, action)
+	}
+}
+
 func TestCloudAgentImageCreatesReferencedNode(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	capability := DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceGrokImage), "grok-image")
@@ -312,16 +375,20 @@ func TestCloudAgentMediaRejectAndInvalidModelDoNotCreateTasks(t *testing.T) {
 			if scenario == "reject" {
 				decision = "reject"
 			}
-			if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, decision, ""); err != nil {
-				t.Fatal(err)
-			}
 			if scenario == "stale-after-approval" {
+				// Approval now executes its prepared tool synchronously before
+				// returning; make the canvas stale before that execution boundary.
 				if err := db.Model(&model.CanvasProject{}).Where("id = ?", "agent-canvas").Update("payload_json", `{"nodes":[],"connections":[]}`).Error; err != nil {
 					t.Fatal(err)
 				}
 			}
-			if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+			if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, decision, ""); err != nil {
 				t.Fatal(err)
+			}
+			if decision == "reject" {
+				if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+					t.Fatal(err)
+				}
 			}
 			run, _ = s.repo.CloudAgent("user", run.ID)
 			state, _ = cloudAgentDecode(run)
@@ -479,7 +546,7 @@ func TestCloudAgentModelListFiltersActualReferences(t *testing.T) {
 			t.Fatalf("intent = %+v", intent)
 		}
 	}
-	for _, args := range []string{`{"mode":"video","referenceNodeIds":["hero","hero"]}`, `{"mode":"video","referenceNodeIds":["missing"]}`, `{"referenceNodeIds":["hero"]}`, `{"mode":"audio","referenceNodeIds":["hero"]}`} {
+	for _, args := range []string{`{"mode":"video","referenceNodeIds":["hero","hero"]}`, `{"mode":"video","referenceNodeIds":["missing"]}`, `{"referenceNodeIds":["hero"]}`, `{"mode":"audio","referenceNodeIds":["hero","cat"]}`} {
 		if _, err := s.cloudAgentModelIntent("user", "agent-canvas", args); err == nil {
 			t.Fatalf("accepted %s", args)
 		}
@@ -615,7 +682,9 @@ func TestCloudAgentMediaPreviousDraftRequiresNewApproval(t *testing.T) {
 	}
 }
 
-func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
+// 界面承诺“图片、视频始终先创建草稿，再经独立审批才提交”：auto 也必须先审批，
+// 审批前不建任务、不扣费；批准后恰好提交一次。
+func TestCloudAgentAutoMediaRequiresApprovalBeforeSubmit(t *testing.T) {
 	s, db, a := agentMediaFixture(t)
 	// Omitted size and duration should be filled by the selected model's catalog
 	// defaults during admission instead of producing a repair turn.
@@ -634,16 +703,28 @@ func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if run.Status == "waiting_approval" || state.Approval != nil {
-		t.Fatalf("auto mode unexpectedly requested approval: status=%s approval=%+v", run.Status, state.Approval)
+	if run.Status != "waiting_approval" || state.Approval == nil {
+		t.Fatalf("auto mode submitted media without approval: status=%s", run.Status)
+	}
+	var pendingTasks, pendingOrders int64
+	db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&pendingTasks)
+	db.Model(&model.BillingOrder{}).Count(&pendingOrders)
+	if pendingTasks != 0 || pendingOrders != ordersBefore {
+		t.Fatalf("charged/submitted before approval: tasks=%d orders=%d before=%d", pendingTasks, pendingOrders, ordersBefore)
+	}
+	if err := s.DecideCloudAgentApproval("user", run.ID, state.Approval.ID, "approve", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.advanceCloudAgentByID("user", run.ID); err != nil {
+		t.Fatal(err)
+	}
+	run, _ = s.repo.CloudAgent("user", run.ID)
+	state, err = cloudAgentDecode(run)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if state.MediaTaskID == "" {
-		t.Fatalf("auto mode did not submit a media task: %+v", state.Events)
-	}
-	for _, event := range state.Events {
-		if event.Type == "approval_requested" {
-			t.Fatal("auto mode emitted an approval event")
-		}
+		t.Fatalf("approved auto media was not submitted: status=%s", run.Status)
 	}
 	task, err := s.repo.TaskForUser("user", state.MediaTaskID)
 	if err != nil {
@@ -661,7 +742,7 @@ func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
 	nodes, _ := creationObjects(doc["nodes"])
 	meta, _ := nodes[a.NodeID]["metadata"].(map[string]any)
 	if meta["status"] != "loading" || meta["taskId"] != task.ID || meta["agentDraftRunId"] != nil {
-		t.Fatalf("auto submission did not finalize the draft: %+v", meta)
+		t.Fatalf("approved submission did not finalize the draft: %+v", meta)
 	}
 	var tasks, orders int64
 	if err := db.Model(&model.Task{}).Where("type = ?", "canvas_video").Count(&tasks).Error; err != nil {
@@ -671,7 +752,7 @@ func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	if tasks != 1 || orders != ordersBefore+1 {
-		t.Fatalf("auto submission created unexpected records: tasks=%d orders=%d before=%d", tasks, orders, ordersBefore)
+		t.Fatalf("approved submission created unexpected records: tasks=%d orders=%d before=%d", tasks, orders, ordersBefore)
 	}
 	// Re-entering a submitted call is idempotent and must not reserve/submit a
 	// second generation.
@@ -682,7 +763,7 @@ func TestCloudAgentAutoMediaSubmitsWithoutApproval(t *testing.T) {
 		t.Fatal(err)
 	}
 	if tasks != 1 {
-		t.Fatalf("re-entering auto media duplicated task: %d", tasks)
+		t.Fatalf("re-entering approved media duplicated task: %d", tasks)
 	}
 
 	// Admission failures are still non-billed tool failures and do not create an
@@ -882,7 +963,8 @@ func TestCloudAgentCanvasUpdatesExistingVideoDraftThroughCapabilityContract(t *t
 	}
 	updated := updatedNodes["video-1789310237935-mmh3-baby-fullmoon"]
 	metadata := updated["metadata"].(map[string]any)
-	if updated["title"] != "满月庆祝视频草稿（舒缓呼吸感）" || metadata["composerContent"] != "下一版舒缓视频提示词" {
+	generationSpec := metadata["generationSpec"].(map[string]any)
+	if updated["title"] != "满月庆祝视频草稿（舒缓呼吸感）" || generationSpec["prompt"] != "下一版舒缓视频提示词" {
 		t.Fatalf("video draft was not updated: %#v", updated)
 	}
 	if metadata["prompt"] != "原始已提交提示词" || metadata["status"] != "error" || metadata["referenceIssue"] != "参考资产尚未准备完成" {
