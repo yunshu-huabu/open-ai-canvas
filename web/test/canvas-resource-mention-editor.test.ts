@@ -13,7 +13,7 @@ describe("canvas resource mention editor", () => {
         const unchangedTextBranch = component.match(/if \(currentValue === value && lastRenderedValueRef.current === value\) \{([^}]+)\}/)?.[1] || "";
         expect(unchangedTextBranch).toContain("syncInlineMentionPreviews(editor, activeReferences)");
         // syncInlineMentionPreviews 随拆分移到 canvas-mention-chips.tsx；只截取该函数本体做断言。
-        const chips = source("../src/components/canvas/canvas-mention-chips.tsx");
+        const chips = source("../src/components/canvas/canvas-mention-chips.tsx").replace(/\r\n/g, "\n");
         const syncStart = chips.indexOf("function syncInlineMentionPreviews(");
         const sync = chips.slice(syncStart, chips.indexOf("\n}\n", syncStart) + 2);
         expect(sync).toContain('byId.get(chip.dataset.mentionReferenceId || "")');
@@ -66,8 +66,9 @@ describe("canvas resource mention editor", () => {
         expect(panel).toContain("<LoaderCircle className=");
         expect(panel).toContain("animate-spin motion-reduce:animate-none");
         expect(panel).not.toContain("isRunning ? theme.accent.danger");
-        expect(configComposer).toContain("wrapper.dataset.referenceToken");
-        expect(configComposer).not.toContain("result += `@[node:");
+        expect(configComposer).toContain("CanvasResourceMentionTextarea");
+        expect(configComposer).toContain("composerReferences(inputs, skillReferences)");
+        expect(configComposer).not.toContain("contentEditable");
         expect(project).not.toContain("removeCanvasResourceMention");
     });
 

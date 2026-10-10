@@ -196,6 +196,19 @@ export function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { i
     );
 }
 
+/**
+ * 历史 URL 只是短期 hint：签名已过期的地址不再直接交给 <img>/<video>，
+ * 否则首帧就会出现 403（画面空白）。带 storageKey 的结果随后由续签流程补上新的地址。
+ */
+function usableResultUrls(urls: string[]) {
+    const now = Date.now();
+    return urls.filter((url) => {
+        if (!url) return false;
+        const expires = /[?&]expires=(\d+)/.exec(url);
+        return !expires || Number(expires[1]) * 1000 > now;
+    });
+}
+
 export function MediaResult({
     item,
     onRetryFailure,
@@ -216,7 +229,7 @@ export function MediaResult({
     const resultStorageKeys = item.resultStorageKeys?.length ? item.resultStorageKeys : creationResultStorageKeys(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: storedResultUrls });
     const hintedAssetIds = creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: storedResultUrls, resultStorageKeys });
     const hintedResultUrls = creationResultDisplayUrls(assets, storedResultUrls, hintedAssetIds);
-    const [resolvedResultUrls, setResolvedResultUrls] = useState(hintedResultUrls);
+    const [resolvedResultUrls, setResolvedResultUrls] = useState(() => usableResultUrls(hintedResultUrls));
 
     useEffect(() => {
         let active = true;
@@ -244,13 +257,13 @@ export function MediaResult({
             }
         };
         if (!resultStorageKeys.length) {
-            setResolvedResultUrls(hintedResultUrls);
+            setResolvedResultUrls(usableResultUrls(hintedResultUrls));
             return () => {
                 active = false;
             };
         }
         // 历史记录只把 URL 当作短期 hint；真正恢复依赖稳定 storageKey，展示 URL 由访问缓存按需续签。
-        setResolvedResultUrls(hintedResultUrls);
+        setResolvedResultUrls(usableResultUrls(hintedResultUrls));
         const resolver = item.mode === "video" ? resolveMediaUrl : resolveImageUrl;
         void Promise.all(
             resultStorageKeys.map(async (storageKey, index) => {
@@ -270,7 +283,7 @@ export function MediaResult({
         };
     }, [item.id, item.mode, resultStorageKeys.join("|"), storedResultUrls.join("|"), hintedResultUrls.join("|")]);
 
-    const alignedResultUrls = resolvedResultUrls;
+    const alignedResultUrls = resultStorageKeys.length ? resolvedResultUrls : usableResultUrls(hintedResultUrls);
     const displayResultUrls = alignedResultUrls.filter(Boolean);
     const resultAssetIds = alignedResultUrls.length || resultStorageKeys.length ? creationResultAssetIds(assets, { messageId: item.id, taskIds: item.taskIds || [], resultUrls: alignedResultUrls, resultStorageKeys }) : [];
     const expectedResultCount = resultStorageKeys.length || alignedResultUrls.length;

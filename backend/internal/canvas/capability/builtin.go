@@ -1,6 +1,6 @@
 package capability
 
-import "infinite-canvas/backend/internal/canvas/contract"
+import "yingce/backend/internal/canvas/contract"
 
 const (
 	maxAgentNodeTitleRunes   = 240
@@ -33,6 +33,15 @@ func BuiltinRegistry() *Registry {
 			InputKind:   "text", Connection: ConnectionPolicy{CanSource: true}, CanUpdate: true,
 			SummaryFields: []string{"content"}, DetailFields: []string{"content"},
 			PatchFields: editableNodeFields("metadata.content", "Markdown 正文", "Markdown 正文"),
+		},
+		{
+			Type: "file", Version: "1", Label: "文本文件", DefaultWidth: 420, DefaultHeight: 320,
+			Purpose:     "承载上传到画布的 TXT、Markdown 或其它文件资源；正文通过 canvas_read_text 在当前用户权限内读取。",
+			GoodFor:     []string{"读取上传小说或剧本原文", "保留原始文件作为改编来源"},
+			NotIdealFor: []string{"图片、视频或音频参考", "需要逐镜维护的结构化分镜"},
+			Tradeoffs:   []string{"文件正文按需读取并分页返回", "二进制文件不会被当作文本解析"},
+			InputKind:   "text", Connection: ConnectionPolicy{CanSource: true},
+			SummaryFields: []string{"mimeType"}, DetailFields: []string{"mimeType"},
 		},
 		generatedMediaDescriptor("image", "2", "图片", 720, 405, "image", ConnectionPolicy{
 			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "character"},
@@ -131,16 +140,28 @@ func characterDescriptor() Descriptor {
 	}
 }
 
+// generatedMediaDescriptor 根据节点类型、显示尺寸、生成模式和连接规则创建媒体能力描述。
+// 返回读写字段及创建默认值；首尾帧只对视频开放，避免其他节点接受无效视频参数。
 func generatedMediaDescriptor(nodeType, version, label string, width, height float64, generationMode string, connection ConnectionPolicy) Descriptor {
 	semantics := generatedMediaSemantics(nodeType)
+	fields := editableNodeFields("metadata.generationSpec.prompt", "提示词", "生成合同中的当前提示词；这是 Agent 唯一读写的媒体提示词")
+	readFields := []string{"prompt", "assetTags", "referenceNodeIds"}
+	if generationMode == "video" {
+		for i, frame := range []struct{ key, label string }{
+			{"videoStartFrameNodeId", "首帧"}, {"videoEndFrameNodeId", "尾帧"},
+		} {
+			fields[frame.key] = PatchField{Path: "metadata." + frame.key, Kind: patchKindString, Label: frame.label, Order: 40 + i, MaxRunes: 80, Description: "已连接图片ID；空字符串取消"}
+			readFields = append(readFields, frame.key)
+		}
+	}
 	return Descriptor{
 		Type: nodeType, Version: version, Label: label, DefaultWidth: width, DefaultHeight: height,
 		Purpose: semantics.Purpose, GoodFor: semantics.GoodFor, NotIdealFor: semantics.NotIdealFor,
 		Tradeoffs: semantics.Tradeoffs, Actions: semantics.Actions,
 		InputKind: nodeType, GenerationMode: generationMode, Connection: connection, CanUpdate: true,
-		SummaryFields:  []string{"prompt", "assetTags", "referenceNodeIds"},
-		DetailFields:   []string{"prompt", "assetTags", "referenceNodeIds"},
-		PatchFields:    editableNodeFields("metadata.generationSpec.prompt", "提示词", "生成合同中的当前提示词；这是 Agent 唯一读写的媒体提示词"),
+		SummaryFields:  readFields,
+		DetailFields:   readFields,
+		PatchFields:    fields,
 		CreateMetadata: func(prompt string) map[string]any { return generatedMetadata(generationMode, prompt) },
 	}
 }
