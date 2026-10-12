@@ -6,6 +6,7 @@
 package repository
 
 import (
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -36,6 +37,18 @@ func (r *Repository) UserOSSSettingForUser(userID string, id string) (*model.Use
 }
 
 func (r *Repository) CreateUserOSSSetting(setting *model.UserOSSSetting) error {
+	if setting.CreatedAt.IsZero() {
+		createdAt := r.db.NowFunc()
+		previous, err := r.LatestUserOSSSetting(setting.UserID)
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+		// Keep successive versions ordered even when the clock has not advanced.
+		if previous != nil && !createdAt.After(previous.CreatedAt) {
+			createdAt = previous.CreatedAt.Add(time.Microsecond)
+		}
+		setting.CreatedAt = createdAt
+	}
 	return r.db.Create(setting).Error
 }
 
