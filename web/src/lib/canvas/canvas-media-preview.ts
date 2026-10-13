@@ -6,6 +6,11 @@ export type CanvasVideoPreviewReference = {
     storageKey?: string;
 };
 
+export function canvasImageDisplayVariant(node: CanvasNodeData, scale: number, pixelRatio: number): "original" | "thumbnail" {
+    // Match the backend's single 512px thumbnail; larger displays keep original detail.
+    return Math.max(node.width, node.height) * scale * pixelRatio > 512 ? "original" : "thumbnail";
+}
+
 /**
  * Returns the passive preview image reference for a video node.
  *

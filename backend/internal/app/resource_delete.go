@@ -299,6 +299,9 @@ func (s *Service) deleteStoredResourceObject(userID string, resource *model.Reso
 	}
 	switch strings.ToLower(strings.TrimSpace(resource.Provider)) {
 	case "", "local":
+		if err := s.deleteLocalResourceObject(assets.ThumbnailObjectKey(resource.ObjectKey)); err != nil {
+			return err
+		}
 		return s.deleteLocalResourceObject(resource.ObjectKey)
 	case aliyunOSSProvider:
 		setting, err := s.ossSettingForResource(userID, resource)

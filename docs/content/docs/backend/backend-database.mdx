@@ -37,6 +37,12 @@ Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`ex
 
 资源引用快照同时读取素材表现的 `resource_id` 和 `metadata_json`（包括嵌套资源字段）；不能先按 `resource_id` 过滤表现记录，否则仅在 metadata 中引用的共享资源会漏检。素材批量删除保留其他素材仍引用的资源；管理员删除也复用这一引用边界。
 
+### 本地图片缩略图
+
+复用版本 41 已有的 `thumbnail_status`、`thumbnail_mime_type`、`thumbnail_size`、`thumbnail_width`、`thumbnail_height` 列，不增加表或迁移。就绪本地 PNG/JPEG 首次访问缩略图时生成最长边 512px 的派生 PNG，对象键为原 `object_key` 加 `.thumbnail.png`；文件发布成功后才将缩略图状态改为 `ready`。后续访问复用文件，资源删除通过原有引用检查后同时清理派生文件。
+
+`width` / `height` 保存原图尺寸，派生尺寸单独保存；访问描述返回原图尺寸，避免缩略图改变节点比例。解码失败、不支持的格式或超过 6400 万像素的图片保留原图回落。本轮不处理云端缩略图，也不扫描历史数据批量生成。
+
 ## 存储配置与加密密钥发布
 
 数据目录中的 `.settings-key` 先写入临时文件并同步、关闭，再通过硬链接发布；文件系统不支持硬链接时使用独占创建，已有密钥不被覆盖。Windows 保留文件内容同步，跳过不支持的目录 `Sync`；其他平台继续同步目录项。Windows 的文件访问控制依赖数据目录的 NTFS ACL，Go 的 `0600` 权限位不能替代 ACL。

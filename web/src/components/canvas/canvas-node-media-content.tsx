@@ -6,7 +6,7 @@
 import { Image as ImageIcon, LoaderCircle, Music2, Play, Video } from "lucide-react";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { useCanvasNodeActions } from "./canvas-node-action-context";
-import { canvasNodeVideoPreviewReference } from "@/lib/canvas/canvas-media-preview";
+import { canvasImageDisplayVariant, canvasNodeVideoPreviewReference } from "@/lib/canvas/canvas-media-preview";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import { CanvasVideoPreviewImage } from "./canvas-video-preview-image";
 import { VideoPlayer } from "@/components/video-player";
@@ -54,6 +54,7 @@ export function ImageNodeContent(props: CanvasNodeContentProps) {
     return (
         <ImageContent
             renderLOD={props.renderLOD}
+            scale={props.scale}
             batchPreviewNodes={props.batchPreviewNodes}
             node={props.node}
             theme={props.theme}
@@ -465,6 +466,7 @@ export function EmptyMediaContent({ icon, label, color }: { icon: ReactNode; lab
 
 export function ImageContent({
     renderLOD = "full",
+    scale = 1,
     node,
     theme,
     isBatchRoot,
@@ -474,10 +476,12 @@ export function ImageContent({
     batchOpening,
     batchRecovering,
     onToggleBatch,
-}: Pick<CanvasNodeContentProps, "renderLOD" | "node" | "theme" | "isBatchRoot" | "batchCount" | "batchPreviewNodes" | "batchExpanded" | "batchOpening" | "batchRecovering" | "onToggleBatch">) {
+}: Pick<CanvasNodeContentProps, "renderLOD" | "scale" | "node" | "theme" | "isBatchRoot" | "batchCount" | "batchPreviewNodes" | "batchExpanded" | "batchOpening" | "batchRecovering" | "onToggleBatch">) {
     const imageContainerRef = useRef<HTMLDivElement>(null);
     const nearViewport = useNearViewport(imageContainerRef, renderLOD !== "shell");
-    const resourceVariant = renderLOD === "full" && (node.metadata?.imageLayer || node.metadata?.imageLayerGroup) ? "original" : "thumbnail";
+    const resourceVariant = renderLOD === "full" && (node.metadata?.imageLayer || node.metadata?.imageLayerGroup)
+        ? "original"
+        : canvasImageDisplayVariant(node, scale, typeof window === "undefined" ? 1 : window.devicePixelRatio || 1);
     const { url, loading, originalWidth, originalHeight } = useNodeResourceUrl(node, nearViewport, resourceVariant);
     const importedFromLibTV = node.metadata?.importSource?.provider === "libtv";
     const { updateMediaNode } = useCanvasNodeActions();

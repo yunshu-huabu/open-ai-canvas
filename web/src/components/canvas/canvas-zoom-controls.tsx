@@ -43,6 +43,7 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
 
     useEffect(() => {
         if (!precisionOpen) return;
+        updateScaleDisplay(liveScaleRef.current);
         const close = (event: PointerEvent) => {
             if (event.target instanceof Node && !rootRef.current?.contains(event.target)) setPrecisionOpen(false);
         };
@@ -60,9 +61,10 @@ export function CanvasZoomControls({ scale, onScaleChange, onFitContent, onAutoA
     function updateScaleDisplay(nextScale: number) {
         liveScaleRef.current = nextScale;
         const percent = String(Math.round(nextScale * 100));
-        if (rangeRef.current) rangeRef.current.value = percent;
-        if (dockLabelRef.current) dockLabelRef.current.textContent = percent;
-        if (panelLabelRef.current) panelLabelRef.current.textContent = `${percent}%`;
+        if (rangeRef.current && rangeRef.current.value !== percent) rangeRef.current.value = percent;
+        if (dockLabelRef.current && dockLabelRef.current.textContent !== percent) dockLabelRef.current.textContent = percent;
+        const panelPercent = `${percent}%`;
+        if (panelLabelRef.current && panelLabelRef.current.textContent !== panelPercent) panelLabelRef.current.textContent = panelPercent;
     }
 
     function commitScale(nextScale: number) {

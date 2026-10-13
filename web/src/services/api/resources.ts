@@ -496,7 +496,8 @@ export async function getResourceAccess(storageKey: string | undefined, purpose:
         }
     }
     const cached = accessCache.get(key);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const thumbnailNotReady = (value: ResourceAccess) => variant === "thumbnail" && value.fallbackReason === "thumbnail_not_ready";
+    if (cached && cached.expiresAt > Date.now() && !thumbnailNotReady(cached.value)) return cached.value;
     const pending = accessRequests.get(key);
     if (pending) return pending;
     let request!: Promise<ResourceAccess>;
@@ -506,7 +507,7 @@ export async function getResourceAccess(storageKey: string | undefined, purpose:
             if (purpose === "display") {
                 const persisted = await readPersistedDisplayAccess(scope, id, variant);
                 assertResourceRequestCurrent(generation, scope);
-                if (persisted) {
+                if (persisted && !thumbnailNotReady(persisted.value)) {
                     accessCache.set(key, persisted);
                     return persisted.value;
                 }

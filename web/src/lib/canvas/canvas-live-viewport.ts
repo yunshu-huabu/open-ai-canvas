@@ -48,6 +48,8 @@ export function applyCanvasLiveViewport(container: HTMLDivElement | null, viewpo
         worldLayer.style.transform = `translate3d(${viewport.x}px, ${viewport.y}px, 0) scale(${viewport.k / committedScale})`;
         worldLayer.style.willChange = container.dataset.canvasViewportInteracting === "true" ? "transform" : "";
     }
+    const gridLayer = container.querySelector<HTMLElement>("[data-canvas-grid-layer]");
+    if (gridLayer) gridLayer.style.backgroundPosition = `${viewport.x}px ${viewport.y}px`;
     // 交互期不要修改根容器上的继承变量。它们会让整棵节点 DOM 子树失效并
     // 触发样式重算；交互结束后由 CanvasViewport 的 committed render 一次性校正。
     // 标题和选框在交互期暂时跟随世界层缩放，换取连续帧的合成路径。

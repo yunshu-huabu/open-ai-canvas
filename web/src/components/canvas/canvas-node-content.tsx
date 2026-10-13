@@ -36,6 +36,7 @@ export type CanvasNodeContentProps = {
     node: CanvasNodeData;
     theme: CanvasTheme;
     renderLOD?: CanvasNodeRenderLOD;
+    scale?: number;
     isEditingContent: boolean;
     textareaRef: RefObject<HTMLTextAreaElement | null>;
     isBatchRoot: boolean;

@@ -27,9 +27,9 @@ function renderGrid(mode: CanvasBackgroundMode, viewport: ViewportTransform, the
     return markup.match(/<div data-canvas-grid-layer[^>]*>/)?.[0] ?? null;
 }
 
-describe("canvas screen-space background", () => {
+describe("canvas background follows viewport pan", () => {
     for (const mode of ["lines", "dots"] as const) {
-        test(`${mode} keeps fixed geometry across zoom, pan and committed renders`, () => {
+        test(`${mode} follows pan while keeping grid density across zoom and committed renders`, () => {
             for (const theme of ["light", "dark"] as const) {
                 const initial = renderGrid(mode, viewports[0], theme);
                 expect(initial).not.toBeNull();
@@ -38,7 +38,11 @@ describe("canvas screen-space background", () => {
                 expect(initial).not.toContain("transform:");
                 expect(initial).not.toContain("var(--canvas-");
                 if (mode === "dots") expect(initial).toContain("0.8px, transparent 1px");
-                for (const viewport of viewports) expect(renderGrid(mode, viewport, theme)).toBe(initial);
+                for (const viewport of viewports) {
+                    const grid = renderGrid(mode, viewport, theme);
+                    expect(grid).toContain(`background-position:${viewport.x}px ${viewport.y}px`);
+                    expect(grid?.replace(/background-position:[^;"]*;?/g, "")).toBe(initial?.replace(/background-position:[^;"]*;?/g, ""));
+                }
             }
         });
     }
@@ -47,11 +51,10 @@ describe("canvas screen-space background", () => {
         for (const viewport of viewports) expect(renderGrid("blank", viewport)).toBeNull();
     });
 
-    test("live updates transform the world and emit events without mutating the background", () => {
+    test("live updates move the grid and world together and emit the same graphics viewport", () => {
         const properties = new Map<string, string>([["--canvas-committed-scale", "0.5"]]);
-        const gridWrites: string[] = [];
         const world = { style: { transform: "", transformOrigin: "", willChange: "" } };
-        const grid = { style: { setProperty: (name: string) => gridWrites.push(name) } };
+        const grid = { style: { backgroundPosition: "" } };
         const container = Object.assign(new EventTarget(), {
             style: {
                 getPropertyValue: (name: string) => properties.get(name) ?? "",
@@ -73,7 +76,7 @@ describe("canvas screen-space background", () => {
             // 交互期不改继承变量，避免整棵节点子树在每一帧强制重算样式。
             expect(properties.has("--canvas-live-scale")).toBe(false);
             expect(properties.has("--canvas-live-inverse-scale")).toBe(false);
-            expect(gridWrites).toEqual([]);
+            expect(grid.style.backgroundPosition).toBe(`${viewport.x}px ${viewport.y}px`);
         }
         expect(graphics).toEqual(viewports);
         expect(previews).toEqual([]);
@@ -87,6 +90,6 @@ describe("canvas screen-space background", () => {
         expect(world.style.willChange).toBe("");
         expect(previews).toEqual([viewports[0]]);
         expect(scrolls).toBe(1);
-        expect(gridWrites).toEqual([]);
+        expect(grid.style.backgroundPosition).toBe("0px 0px");
     });
 });

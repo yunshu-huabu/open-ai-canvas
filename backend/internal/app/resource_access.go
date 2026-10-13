@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"time"
@@ -63,6 +64,11 @@ func (s *Service) resolveResourceAccess(resource *model.Resource, options Resour
 	if resource == nil {
 		return nil, NotFound("资源不存在")
 	}
+	if options.Variant == assets.VariantThumbnail {
+		if err := s.ensureLocalResourceThumbnail(resource); err != nil {
+			slog.Warn("resource thumbnail unavailable", "resource", resource.ID, "error", err)
+		}
+	}
 	var setting ossSettingValue
 	if resource.Provider != "local" {
 		var err error
@@ -109,6 +115,12 @@ func (s *Service) prepareResourceDelivery(userID string, resource *model.Resourc
 	}
 	if access.ActualVariant == assets.VariantPlayback {
 		delivery.Stream, err = s.OpenResourcePlaybackRange(userID, resource.ID)
+	} else if access.ActualVariant == assets.VariantThumbnail {
+		thumbnail := *resource
+		thumbnail.ObjectKey = assets.ThumbnailObjectKey(resource.ObjectKey)
+		thumbnail.MimeType, thumbnail.Size = resource.ThumbnailMimeType, resource.ThumbnailSize
+		thumbnail.Width, thumbnail.Height = resource.ThumbnailWidth, resource.ThumbnailHeight
+		delivery.Stream, err = s.openResourceRange(userID, &thumbnail, rangeHeader)
 	} else {
 		delivery.Stream, err = s.openResourceRange(userID, resource, rangeHeader)
 	}

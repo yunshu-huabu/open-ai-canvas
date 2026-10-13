@@ -59,7 +59,7 @@ describe("large canvas media rendering", () => {
     });
 
     test("decodes canvas images synchronously so zoom re-rasterization never paints blank frames", () => {
-        const retainedImageSource = canvasNodeContentSource.match(/export function RetainedCanvasImage[\s\S]*?\n}\n/)?.[0] || "";
+        const retainedImageSource = canvasNodeContentSource.match(/export function RetainedCanvasImage[\s\S]*?\r?\n}\r?\n/)?.[0] || "";
         expect(retainedImageSource).toContain('decoding="sync"');
         expect(retainedImageSource).not.toContain('decoding="async"');
     });
@@ -69,7 +69,7 @@ describe("large canvas media rendering", () => {
     });
 
     test("keeps inactive video nodes on a viewport-gated static first frame", () => {
-        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?\n}\n\n(?:export )?function VideoPreviewPlayButton/)?.[0] || "";
+        const inactivePreviewSource = canvasNodeContentSource.match(/function InactiveVideoPreview[\s\S]*?\r?\n}\r?\n\r?\n(?:export )?function VideoPreviewPlayButton/)?.[0] || "";
         expect(canvasNodeContentSource).toContain("if (hasPersistedPreview || !nearViewport || (!node.metadata?.content && !node.metadata?.storageKey) || !updateMetadataRef.current)");
         expect(canvasNodeContentSource).not.toContain("hydrateMediaPreview");
         expect(inactivePreviewSource).toContain("hasPersistedPreview || !nearViewport");

@@ -70,6 +70,7 @@ export function CanvasViewport({
     const panState = useRef({
         isPanning: false,
         pointerId: -1,
+        button: 0,
         startX: 0,
         startY: 0,
         initialX: 0,
@@ -317,6 +318,7 @@ export function CanvasViewport({
             panState.current = {
                 isPanning: true,
                 pointerId: event.pointerId,
+                button: 0,
                 startX: event.clientX,
                 startY: event.clientY,
                 initialX: current.x,
@@ -336,6 +338,7 @@ export function CanvasViewport({
             panState.current = {
                 isPanning: true,
                 pointerId: event.pointerId,
+                button: event.button,
                 startX: event.clientX,
                 startY: event.clientY,
                 initialX: current.x,
@@ -373,6 +376,11 @@ export function CanvasViewport({
             }
 
             if (!panState.current.isPanning || panState.current.pointerId !== event.pointerId) return;
+            // 多键同时按下时，释放中键产生 pointermove，而不是 pointerup。
+            if (event.pointerType === "mouse" && !(event.buttons & (panState.current.button === 1 ? 4 : 1))) {
+                handlePointerEnd(event);
+                return;
+            }
 
             const dx = event.clientX - panState.current.startX;
             const dy = event.clientY - panState.current.startY;
@@ -410,6 +418,8 @@ export function CanvasViewport({
             }
             panState.current.isPanning = false;
             panState.current.pointerId = -1;
+            const container = containerRef.current;
+            if (container?.hasPointerCapture(event.pointerId)) container.releasePointerCapture(event.pointerId);
             interactingRef.current = false;
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
             delete containerRef.current?.dataset.canvasViewportInteracting;
@@ -421,10 +431,12 @@ export function CanvasViewport({
         window.addEventListener("pointermove", handlePointerMove);
         window.addEventListener("pointerup", handlePointerEnd);
         window.addEventListener("pointercancel", handlePointerEnd);
+        window.addEventListener("lostpointercapture", handlePointerEnd);
         return () => {
             window.removeEventListener("pointermove", handlePointerMove);
             window.removeEventListener("pointerup", handlePointerEnd);
             window.removeEventListener("pointercancel", handlePointerEnd);
+            window.removeEventListener("lostpointercapture", handlePointerEnd);
         };
     }, [interactive, containerRef, onCanvasDeselect, scheduleViewportChange, syncViewport]);
 
@@ -503,7 +515,7 @@ export function CanvasViewport({
                 onDrop?.(event);
             }}
         >
-            <CanvasGrid appearance={appearance} mode={backgroundMode} />
+            <CanvasGrid appearance={appearance} mode={backgroundMode} viewport={viewport} />
             {graphicsLayer}
             <div data-canvas-world-layer className="canvas-world-layer absolute origin-top-left">
                 <div data-canvas-world-raster-layer className="canvas-world-raster-layer absolute origin-top-left">
@@ -519,7 +531,7 @@ function isCanvasInternalDragEvent(event: React.DragEvent<HTMLDivElement>) {
     return Boolean(target?.closest(CANVAS_INTERNAL_DRAG_SELECTOR));
 }
 
-export function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode }) {
+export function CanvasGrid({ appearance, mode, viewport }: { appearance?: CanvasAppearance; mode: CanvasBackgroundMode; viewport: ViewportTransform }) {
     const colorTheme = useActiveTheme();
     const gridColor = resolveCanvasGridColor(appearance, colorTheme, mode);
     const backgroundImage = mode === "dots" ? `radial-gradient(circle, ${gridColor} 0.8px, transparent 1px)` : `linear-gradient(${gridColor} 1px, transparent 1px), linear-gradient(90deg, ${gridColor} 1px, transparent 1px)`;
@@ -530,10 +542,11 @@ export function CanvasGrid({ appearance, mode }: { appearance?: CanvasAppearance
             data-canvas-grid-layer
             className="pointer-events-none absolute"
             style={{
-                // 装饰网格固定在屏幕坐标，避免缩放时改变密度或产生亚像素位移闪烁。
+                // 网格随公共视图偏移平移，保持原有间距，避免缩放时出现密度闪烁。
                 inset: 0,
                 backgroundImage,
                 backgroundSize: "48px 48px",
+                backgroundPosition: `${viewport.x}px ${viewport.y}px`,
                 opacity: mode === "dots" ? 0.34 : 0.46,
             }}
         />
