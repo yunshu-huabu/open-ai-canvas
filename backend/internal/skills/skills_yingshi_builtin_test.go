@@ -1,6 +1,7 @@
 package skills
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -66,7 +67,8 @@ func TestYingshiBuiltinBundleCompatibility(t *testing.T) {
 		if !strings.HasSuffix(path, "/__init__.py") {
 			executableCount++
 		}
-		fileHash := sha256.Sum256(target.archive.Files[path])
+		// Windows 检出可能把文本换行转换为 CRLF，哈希按仓库中的 LF 内容计算。
+		fileHash := sha256.Sum256(bytes.ReplaceAll(target.archive.Files[path], []byte("\r\n"), []byte("\n")))
 		_, _ = fmt.Fprintf(digest, "%s\t%s\n", path, hex.EncodeToString(fileHash[:]))
 	}
 	if executableCount != 31 {
