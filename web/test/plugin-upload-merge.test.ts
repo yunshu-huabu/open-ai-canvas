@@ -33,11 +33,11 @@ test("copied guide manifest is accepted by the real plugin registry", async () =
     }
 });
 
-test("reduced motion preserves modal completion events", async () => {
+test("reduced motion keeps minimal animation and disables transitions for popup positioning", async () => {
     const css = await Bun.file(new URL("../src/pages/admin/theme/admin-chrome.css", import.meta.url)).text();
     const reducedMotion = css.slice(css.lastIndexOf("@media (prefers-reduced-motion: reduce)"));
     expect(reducedMotion).toContain("animation-duration: 0.01ms !important");
-    expect(reducedMotion).toContain("transition-duration: 0.01ms !important");
+    expect(reducedMotion).toContain("transition-duration: 0ms !important");
     expect(reducedMotion).not.toContain("animation: none");
     expect(reducedMotion).not.toContain("transition: none");
 });

@@ -9,6 +9,17 @@ const scripts = fileURLToPath(new URL("../../.github/scripts/", import.meta.url)
 const temporaryDirectories = [];
 const sha = "a".repeat(40);
 const digest = "b".repeat(64);
+let bash = "bash";
+if (process.platform === "win32") {
+    const git = Bun.which("git");
+    if (!git) throw new Error("Windows 镜像脚本测试需要 Git for Windows 提供的 Bash");
+    bash = path.resolve(path.dirname(git), "../bin/bash.exe");
+}
+
+function shellPath(value) {
+    return value.replaceAll("\\", "/").replace(/^([a-z]):/i, (_, drive) => `/${drive.toLowerCase()}`);
+}
+
 afterEach(() => {
     for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
@@ -26,29 +37,36 @@ function fixture(overrides = {}) {
     });
     writeFileSync(path.join(bin, "gh"), '#!/bin/sh\nif [ -n "$MOCK_GH_ERROR" ]; then exit 1; fi\nprintf "%s\\n" "$MOCK_MAIN"\n', { mode: 0o755 });
     const output = path.join(root, "output");
+    const callFile = path.join(root, "docker-call");
     writeFileSync(output, "");
     const env = {
         ...process.env,
-        PATH: `${bin}:${process.env.PATH}`,
-        GITHUB_OUTPUT: output,
+        FIXTURE_BIN: shellPath(bin),
+        GITHUB_OUTPUT: shellPath(output),
         GITHUB_SHA: sha,
         GITHUB_REF: "refs/heads/main",
         GITHUB_REPOSITORY: "fixture/repo",
         IMAGE: "ghcr.io/fixture/image",
         VERSION_TAG: "1.5.5",
         EXPECTED_DIGESTS: "1",
-        DIGEST_DIR: digests,
+        DIGEST_DIR: shellPath(digests),
         MOCK_DIGEST: `sha256:${digest}`,
         MOCK_ERROR: "",
         MOCK_GH_ERROR: "",
         MOCK_MAIN: sha,
-        MOCK_CALL: path.join(root, "docker-call"),
+        MOCK_CALL: shellPath(callFile),
         ...overrides,
     };
     return {
-        run: (script, ...args) => spawnSync("bash", [path.join(scripts, script), ...args], { env, encoding: "utf8" }),
+        run: (script, ...args) => {
+            // 执行真实脚本，统一检出换行，并在 Bash 内设置模拟命令的 PATH。
+            const input = readFileSync(path.join(scripts, script), "utf8").replace(/\r\n/g, "\n");
+            const result = spawnSync(bash, ["-c", 'export PATH="$FIXTURE_BIN:$PATH"; exec bash -s -- "$@"', "image-release-test", ...args], { env, input, encoding: "utf8" });
+            if (result.error) throw result.error;
+            return result;
+        },
         output: () => readFileSync(output, "utf8"),
-        call: () => (existsSync(env.MOCK_CALL) ? readFileSync(env.MOCK_CALL, "utf8") : ""),
+        call: () => (existsSync(callFile) ? readFileSync(callFile, "utf8") : ""),
     };
 }
 
