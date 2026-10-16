@@ -1,9 +1,10 @@
-import { Fragment, useId, useState, type CSSProperties } from "react";
+import { Fragment, useState, type CSSProperties } from "react";
 import { Popover } from "antd";
 import { AlignLeft, ArrowUpRight, Check, ChevronUp, Clapperboard, FolderKanban, Images, Palette, Pencil, Plus, Sparkles, Type, Upload, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { CanvasCreateMenu, type CanvasCreateCommand } from "@/components/canvas/canvas-create-menu";
+import { CanvasAgentMascot } from "./canvas-agent-mascot";
 import type { CanvasShortDramaProgress, CanvasShortDramaStepId } from "@/lib/canvas/canvas-short-drama";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasNodeData } from "@/types/canvas";
@@ -46,9 +47,9 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onSt
                 <header className="canvas-entry-header">
                     <div className="canvas-entry-heading-copy">
                         <h2><span>让灵感，</span><strong>开始成片。</strong></h2>
-                        <p>从一句想法开始，和 Agent 一起创作。</p>
+                        <p>从一句想法开始，<br />和 Agent 一起创作。</p>
                     </div>
-                    <CanvasEntryFilmMark />
+                    <div className="canvas-entry-character"><CanvasAgentMascot hero /></div>
                 </header>
                 <div className="canvas-entry-actions">
                     <button type="button" className="canvas-entry-agent" onClick={onOpenAgent}>
@@ -69,31 +70,6 @@ export function CanvasShortDramaEmptyState({ onCreatePipeline, onOpenAgent, onSt
                 </div>
             </div>
         </div>
-    );
-}
-
-function CanvasEntryFilmMark() {
-    const id = useId();
-    return (
-        <svg className="canvas-entry-film-mark" viewBox="0 0 112 112" fill="none" aria-hidden="true" focusable="false">
-            <defs>
-                <linearGradient id={`${id}-front`} x1="27" y1="18" x2="76" y2="91" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="var(--canvas-entry-metal-highlight)" />
-                    <stop offset="0.42" stopColor="var(--canvas-entry-metal-mid)" />
-                    <stop offset="0.66" stopColor="var(--canvas-entry-metal-highlight)" />
-                    <stop offset="1" stopColor="var(--canvas-entry-metal-shadow)" />
-                </linearGradient>
-                <linearGradient id={`${id}-edge`} x1="36" y1="21" x2="86" y2="83" gradientUnits="userSpaceOnUse">
-                    <stop stopColor="var(--canvas-entry-metal-mid)" />
-                    <stop offset="1" stopColor="var(--canvas-entry-metal-shadow)" />
-                </linearGradient>
-            </defs>
-            <path d="M35 17 92 50Q98 54 92 58L35 91 26 86 82 54 26 22Z" fill={`url(#${id}-edge)`} />
-            <path d="M26 22 82 54 26 86V22ZM36 39V69L62 54 36 39Z" fill={`url(#${id}-front)`} fillRule="evenodd" />
-            <path d="M26 22 82 54 26 86V22Z" stroke="var(--canvas-entry-metal-highlight)" strokeOpacity="0.45" strokeWidth="0.6" strokeLinejoin="round" />
-            <path d="M36 39V69L62 54" stroke="var(--canvas-entry-metal-shadow)" strokeWidth="1" strokeLinejoin="round" />
-            <path d="m35 17 57 33" stroke="var(--canvas-entry-metal-highlight)" strokeOpacity="0.5" strokeWidth="0.6" />
-        </svg>
     );
 }
 

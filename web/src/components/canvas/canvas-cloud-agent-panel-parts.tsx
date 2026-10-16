@@ -12,7 +12,7 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Live2DAvatar } from "./live2d-avatar";
 import { live2DModelURL } from "@/services/api/appearance";
-import { FluidOrb } from "@/components/ui/fluid-orb";
+import { CanvasAgentMascot, type AgentMascotActivity } from "./canvas-agent-mascot";
 import { ArrowLeft, Check, CircleDot, Clock3, Download, History, LoaderCircle, MessageSquarePlus, RotateCcw, Settings2, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { Button, Dropdown, Input, Popover } from "antd";
 import type { AgentContextPhase, AgentContextUsageView } from "@/lib/canvas/agent-context-usage";
@@ -35,34 +35,49 @@ import type { ApprovalState } from "./canvas-cloud-agent-events";
 
 // hidden 为 true 时入口保持挂载但不显示：Live2D 模型加载开销大，面板开合不能卸载它，
 // 否则每次重新挂载都要重新下载模型并重建渲染上下文。
-export function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, hidden = false, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; hidden?: boolean; onOpen: () => void }) {
+export function AgentLauncher({ theme, statusColor, approvalPending, activity, reducedMotion, hidden = false, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; activity: AgentMascotActivity; reducedMotion: boolean; hidden?: boolean; onOpen: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
     const appearanceResolved = useAppearanceStore((state) => state.resolved);
     const live = appearance.avatarType === "live2d" && Boolean(appearance.live2dResourceId && appearance.live2dEntry);
     const [live2DError, setLive2DError] = useState("");
+    const [opening, setOpening] = useState(false);
+    const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => () => { if (openTimer.current !== null) clearTimeout(openTimer.current); }, []);
     const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
     useEffect(() => {
         const resize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
         window.addEventListener("resize", resize);
         return () => window.removeEventListener("resize", resize);
     }, []);
-    const height = live ? Math.max(40, Math.min(appearance.avatarHeight, viewport.height - 60, (viewport.width - 40) / 0.75)) : 76;
-    const width = live ? Math.round(height * 0.75) : 76;
-    const { position, dragging, handlers } = useAgentLauncherPosition(onOpen, width, height);
+    const height = live ? Math.max(40, Math.min(appearance.avatarHeight, viewport.height - 60, (viewport.width - 40) / 0.75)) : 108;
+    const width = live ? Math.round(height * 0.75) : 96;
+    const { position, dragging, handlers } = useAgentLauncherPosition(() => {
+        if (openTimer.current !== null) return;
+        if (reducedMotion) { onOpen(); return; }
+        setOpening(true);
+        openTimer.current = setTimeout(() => {
+            openTimer.current = null;
+            setOpening(false);
+            onOpen();
+        }, 260);
+    }, width, height);
+    const activityLabel = approvalPending ? "等待你的审批" : activity === "generating" ? "正在生成" : activity === "thinking" ? "正在思考" : "随时陪你创作";
     return (
         <motion.button
             type="button"
-            aria-label={`打开${appearance.agentName}`}
-            title={live && live2DError ? live2DError : `${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
+            aria-label={`打开${appearance.agentName} · ${activityLabel}`}
+            aria-expanded={hidden}
+            title={live && live2DError ? live2DError : `${appearance.agentName} · ${activityLabel} · 拖动可调整位置，聚焦后可用方向键移动`}
             className={cn("canvas-agent-launcher fixed z-[calc(var(--z-toast)+1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35", dragging && "is-dragging", live && "canvas-agent-launcher-live2d")}
-            style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow, ...(hidden ? { display: "none" } : null) } as CSSProperties}
+            style={{ ...position, width, height, color: theme.node.text, ...(hidden ? { display: "none" } : null) } as CSSProperties}
             aria-hidden={hidden || undefined}
             tabIndex={hidden ? -1 : undefined}
             data-canvas-no-zoom
             {...handlers}
-            whileHover={reducedMotion || dragging ? undefined : { scale: 1.035 }}
-            whileTap={reducedMotion || dragging ? undefined : { scale: 0.96 }}
-            transition={{ duration: reducedMotion ? 0 : 0.18 }}
+            animate={opening ? { scale: [1, 1.12, 0.98, 1], y: [0, -5, 0, 0] } : { scale: 1, y: 0 }}
+            whileHover={reducedMotion || dragging || opening ? undefined : { scale: 1.035 }}
+            whileTap={reducedMotion || dragging || opening ? undefined : { scale: 0.96 }}
+            transition={{ duration: reducedMotion ? 0 : opening ? 0.26 : 0.18 }}
         >
             {live ? (
                 <Live2DAvatar
@@ -70,12 +85,12 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
                     width={width}
                     height={height}
                     reducedMotion={reducedMotion}
-                    fallback={<FluidOrb size={60} color="#7164f6" />}
+                    fallback={<span className="canvas-agent-launcher-fallback"><CanvasAgentMascot activity={activity} paused={hidden} /></span>}
                     onReady={() => setLive2DError("")}
                     onError={setLive2DError}
                 />
             ) : appearanceResolved ? (
-                <FluidOrb size={60} color="#7164f6" />
+                <CanvasAgentMascot activity={activity} paused={hidden} />
             ) : (
                 <span role="status" aria-busy="true">
                     <LoaderCircle className={reducedMotion ? "size-6" : "size-6 motion-safe:animate-spin"} aria-hidden="true" />

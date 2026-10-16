@@ -1,8 +1,6 @@
 .canvas-entry-stage {
     --canvas-entry-hairline: color-mix(in srgb, var(--canvas-entry-text) 18%, transparent);
-    --canvas-entry-metal-highlight: var(--canvas-entry-text);
-    --canvas-entry-metal-mid: color-mix(in srgb, var(--canvas-entry-text) 52%, var(--canvas-entry-muted));
-    --canvas-entry-metal-shadow: color-mix(in srgb, var(--canvas-entry-muted) 32%, transparent);
+    --canvas-entry-lilac: color-mix(in srgb, var(--palette-node-script) 22%, var(--color-neutral-0));
     position: absolute;
     inset: 0;
     z-index: var(--z-node-active);
@@ -14,12 +12,12 @@
 }
 
 .canvas-entry-shell {
-    width: min(100%, 520px);
+    width: min(100%, 620px);
     max-height: 100%;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: var(--space-2);
+    padding: var(--space-4);
     text-align: left;
     pointer-events: auto;
 }
@@ -28,7 +26,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-4);
+    gap: var(--space-2);
 }
 
 .canvas-entry-heading-copy { min-width: 0; }
@@ -38,28 +36,37 @@
     flex-direction: column;
     gap: var(--space-1);
     margin: 0;
-    font-size: var(--typ-display-md);
+    font-size: clamp(var(--typ-display-md), 3.4vw, var(--typ-display-lg));
     font-weight: 400;
     letter-spacing: -0.035em;
-    line-height: 1.45;
+    line-height: 1.5;
 }
 
 .canvas-entry-header h2 > span { color: var(--canvas-entry-muted); }
-.canvas-entry-header h2 > strong { font-weight: 600; }
+.canvas-entry-header h2 > span, .canvas-entry-header h2 > strong { white-space: nowrap; }
+.canvas-entry-header h2 > strong { position: relative; width: fit-content; font-weight: 650; }
+.canvas-entry-header h2 > strong::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 calc(-1 * var(--space-1));
+    height: var(--space-1-half);
+    border-radius: 50%;
+    background: linear-gradient(90deg, var(--palette-node-script), var(--canvas-entry-lilac), transparent);
+    transform: rotate(-3deg);
+}
 
 .canvas-entry-header p {
-    margin: var(--space-4) 0 0;
+    margin: var(--space-6) 0 0;
     color: var(--canvas-entry-muted);
-    font-size: var(--fs-caption);
+    font-size: var(--fs-body-lg);
     line-height: 1.8;
     text-wrap: balance;
 }
 
-.canvas-entry-film-mark {
-    width: calc(var(--space-24) + var(--space-4));
-    height: calc(var(--space-24) + var(--space-4));
+.canvas-entry-character {
+    width: 53%;
+    max-width: calc(var(--space-24) * 3.2);
     flex-shrink: 0;
-    margin-right: var(--space-2);
 }
 
 .canvas-entry-shell button {
@@ -80,7 +87,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3) var(--space-8);
-    margin-top: var(--space-10);
+    margin-top: var(--space-4);
 }
 
 .canvas-entry-shell .canvas-entry-agent {
@@ -104,15 +111,18 @@
 
 .canvas-entry-agent-arrow {
     display: grid;
-    width: var(--space-8);
-    height: var(--space-8);
+    width: var(--space-12);
+    height: var(--space-12);
     place-items: center;
     border: var(--stroke-1) solid var(--canvas-entry-hairline);
     border-radius: var(--r-full);
+    background: radial-gradient(circle at 30% 20%, var(--color-neutral-0), var(--canvas-entry-lilac));
+    color: var(--color-neutral-950);
+    box-shadow: inset 0 0 var(--space-2) var(--color-neutral-0);
     transition: border-color var(--motion-state) ease, transform var(--motion-state) var(--motion-ease-out);
 }
 
-.canvas-entry-agent-arrow svg { width: var(--space-4); height: var(--space-4); }
+.canvas-entry-agent-arrow svg { width: var(--space-6); height: var(--space-6); }
 .canvas-entry-agent:is(:hover, :focus-visible) .canvas-entry-agent-label::after { transform: scaleX(1); }
 .canvas-entry-agent:is(:hover, :focus-visible) .canvas-entry-agent-arrow {
     border-color: var(--canvas-entry-muted);
@@ -137,6 +147,11 @@
 }
 
 .canvas-entry-secondary-actions svg { width: var(--space-3); height: var(--space-3); opacity: 0.6; }
+.canvas-entry-secondary-actions button + button {
+    padding-left: var(--space-4);
+    border-left: var(--stroke-1) solid var(--canvas-entry-hairline);
+    border-radius: 0;
+}
 .canvas-entry-secondary-actions button:hover,
 .canvas-entry-quick-actions button:hover { color: var(--canvas-entry-text); }
 
@@ -156,7 +171,7 @@
     position: absolute;
     inset: 0 0 auto;
     height: var(--stroke-1);
-    background: linear-gradient(90deg, var(--canvas-entry-hairline), transparent);
+    background: var(--canvas-entry-hairline);
 }
 
 .canvas-entry-quick-actions { gap: var(--space-6); }
@@ -164,9 +179,15 @@
 
 @media (max-width: 520px) {
     .canvas-entry-stage { padding-inline: var(--space-5); }
-    .canvas-entry-header h2 { font-size: var(--typ-display-sm); }
-    .canvas-entry-film-mark { width: var(--space-20); height: var(--space-20); margin-right: 0; }
-    .canvas-entry-actions { column-gap: var(--space-4); margin-top: var(--space-8); }
+    .canvas-entry-shell { padding-inline: 0; }
+    .canvas-entry-header h2 { font-size: clamp(var(--fs-title), 5.8vw, var(--typ-display-md)); }
+    .canvas-entry-header p { font-size: var(--fs-caption); }
+    .canvas-entry-character { width: 42%; }
+    .canvas-entry-actions { column-gap: var(--space-4); margin-top: var(--space-5); }
+    .canvas-entry-shell .canvas-entry-agent { gap: var(--space-2); font-size: var(--fs-heading); }
+    .canvas-entry-agent-arrow { width: var(--space-10); height: var(--space-10); }
+    .canvas-entry-secondary-actions { gap: var(--space-2); }
+    .canvas-entry-secondary-actions button + button { padding-left: var(--space-2); }
     .canvas-entry-quick-actions { gap: var(--space-4); }
 }
 

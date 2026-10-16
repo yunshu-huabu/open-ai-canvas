@@ -47,6 +47,7 @@ import {
 import { logicalModelIDForConfig, modelOptionName, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { selectImageInspectionModel } from "@/lib/canvas/image-to-previs-agent";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
+import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { applyAgentCanvasPatches, refreshCanvasAfterAgent, saveRemoteUserDataNow } from "@/services/user-data-sync";
@@ -316,6 +317,10 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         [busy, conversationScope, historyHydrated, installedSkillIds, pendingHydrated, running],
     );
     const status = run?.status || "idle";
+    const generatingMedia = useCanvasStore((state) => state.projects.find((project) => project.id === canvasId)?.nodes.some((node) =>
+        (node.type === "image" || node.type === "video" || node.type === "audio") && node.metadata?.status === "loading",
+    ) ?? false);
+    const mascotActivity = approval ? "approval" : generatingMedia ? "generating" : busy || running ? "thinking" : "idle";
     const statusLabel =
         status === "waiting_approval" ? "等待审批" : status === "running" || status === "queued" ? "运行中" : status === "completed" ? "已完成" : status === "failed" ? "异常" : status === "cancelled" ? "已停止" : status === "rejected" ? "已拒绝" : "待命";
     const statusColor = status === "failed" ? "#e66b6b" : status === "rejected" || status === "cancelled" ? theme.node.muted : status === "waiting_approval" ? "#d6a24a" : status === "running" || status === "queued" ? "#69c29b" : theme.node.muted;
@@ -937,7 +942,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
 
     return (
         <>
-            <AgentLauncher theme={theme} statusColor={statusColor} approvalPending={Boolean(approval)} reducedMotion={Boolean(reducedMotion)} hidden={open} onOpen={onOpen} />
+            <AgentLauncher theme={theme} statusColor={statusColor} approvalPending={Boolean(approval)} activity={mascotActivity} reducedMotion={Boolean(reducedMotion)} hidden={open} onOpen={onOpen} />
             <AnimatePresence>
                 {open ? (
                     <motion.aside

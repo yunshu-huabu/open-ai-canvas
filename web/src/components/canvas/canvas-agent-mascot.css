@@ -1,0 +1,57 @@
+.canvas-agent-mascot {
+    --mascot-pearl: var(--color-neutral-0);
+    --mascot-violet: var(--palette-node-script);
+    --mascot-cyan: var(--palette-node-audio);
+    --mascot-cycle: 3.8s;
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    pointer-events: none;
+    isolation: isolate;
+}
+
+.canvas-agent-launcher-fallback { display: block; width: var(--space-24); }
+.mascot-halo {
+    position: absolute;
+    inset: 12%;
+    border-radius: var(--r-full);
+    background: radial-gradient(ellipse, color-mix(in srgb, var(--mascot-violet) 18%, transparent), transparent 70%);
+    animation: mascot-breathe var(--mascot-cycle) ease-in-out infinite;
+}
+.mascot-float { position: relative; display: block; width: 100%; height: 100%; animation: mascot-float var(--mascot-cycle) ease-in-out infinite; }
+.canvas-agent-mascot .mascot-artwork,
+.canvas-agent-mascot .mascot-blink { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
+.canvas-agent-mascot .mascot-blink {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    mask-image: radial-gradient(ellipse 10% 8% at 37% 50%, black 65%, transparent), radial-gradient(ellipse 10% 8% at 56% 44%, black 65%, transparent);
+}
+.canvas-agent-mascot[data-variant="hero"] .mascot-blink {
+    mask-image: radial-gradient(ellipse 10% 8% at 40% 55%, black 65%, transparent), radial-gradient(ellipse 10% 8% at 58% 50%, black 65%, transparent);
+}
+.canvas-agent-mascot[data-blinking] .mascot-blink { opacity: 1; }
+.mascot-light-trail { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: visible; }
+.mascot-orbit { animation: mascot-orbit 15.2s linear infinite; }
+.mascot-thinking { position: absolute; top: 57%; left: 42%; display: flex; gap: 3%; width: 16%; opacity: 0; transform: rotate(-17deg); }
+.canvas-agent-mascot[data-variant="hero"] .mascot-thinking { top: 62%; left: 45%; }
+.mascot-thinking i { width: 13%; aspect-ratio: 1; border-radius: var(--r-full); background: var(--mascot-pearl); }
+.canvas-agent-mascot[data-activity="thinking"] .mascot-thinking { opacity: .8; }
+.canvas-agent-mascot[data-activity="thinking"] .mascot-thinking i { animation: mascot-thought 1.9s ease-in-out infinite; }
+.canvas-agent-mascot .mascot-thinking i:nth-child(2) { animation-delay: .2s; }
+.canvas-agent-mascot .mascot-thinking i:nth-child(3) { animation-delay: .4s; }
+.canvas-agent-mascot[data-activity="generating"] .mascot-orbit { animation-duration: 3.8s; }
+.canvas-agent-mascot[data-activity="approval"] .mascot-orbit,
+.canvas-agent-launcher.is-dragging .mascot-float,
+.canvas-agent-mascot[data-paused] * { animation-play-state: paused; }
+
+@keyframes mascot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes mascot-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes mascot-orbit { to { transform: rotate(360deg); } }
+@keyframes mascot-thought { 0%, 100% { opacity: .3; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .canvas-agent-mascot * { animation: none !important; transition: none !important; }
+    .canvas-agent-mascot .mascot-blink { display: none; }
+}
