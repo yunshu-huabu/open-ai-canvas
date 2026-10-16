@@ -386,16 +386,6 @@
     color: inherit;
 }
 
-.auth-scene-hero-control {
-    border: 1px solid color-mix(in srgb, var(--foreground) 16%, transparent);
-    background: color-mix(in srgb, var(--auth-panel-bg) 78%, transparent);
-    color: color-mix(in srgb, var(--foreground) 82%, transparent);
-}
-
-.auth-scene-hero-control:hover {
-    background: color-mix(in srgb, var(--auth-panel-bg) 92%, transparent);
-}
-
 .auth-scene-hero-muted {
     color: color-mix(in srgb, var(--foreground) 64%, transparent);
 }
@@ -409,7 +399,37 @@
 }
 
 .auth-scene-video-blend {
-    background: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--auth-panel-bg) 68%, transparent) 58%, var(--auth-panel-bg) 100%);
+    width: clamp(120px, 12vw, 240px);
+    background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--auth-panel-bg) 0%, transparent) 0%,
+        color-mix(in srgb, var(--auth-panel-bg) 4%, transparent) 12%,
+        color-mix(in srgb, var(--auth-panel-bg) 16%, transparent) 25%,
+        color-mix(in srgb, var(--auth-panel-bg) 50%, transparent) 50%,
+        color-mix(in srgb, var(--auth-panel-bg) 84%, transparent) 75%,
+        color-mix(in srgb, var(--auth-panel-bg) 96%, transparent) 88%,
+        var(--auth-panel-bg) 100%
+    );
+    pointer-events: none;
+}
+
+@media (min-width: 64rem) {
+    .auth-scene {
+        --auth-blend-extension: clamp(40px, 4vw, 80px);
+    }
+
+    /* 影片与羽化同步向右延长，固定渐变左端和表单布局。 */
+    .auth-scene-hero {
+        margin-right: calc(-1 * var(--auth-blend-extension));
+    }
+
+    .auth-scene-video-blend {
+        width: calc(clamp(120px, 12vw, 240px) + var(--auth-blend-extension));
+    }
+
+    .auth-scene-form-pane {
+        background: linear-gradient(90deg, transparent var(--auth-blend-extension), var(--auth-panel-bg) var(--auth-blend-extension));
+    }
 }
 
 .auth-scene-card {
@@ -7162,8 +7182,14 @@ html:not(.dark) .creation-studio-control[aria-expanded="true"] { background: #e7
 
     .auth-scene-card input:-webkit-autofill,
     .auth-scene-card input:-webkit-autofill:hover,
-    .auth-scene-card input:-webkit-autofill:focus {
-        box-shadow: 0 0 0 1000px var(--auth-card-bg) inset !important;
+    .auth-scene-card input:-webkit-autofill:focus,
+    .auth-scene-card .ant-input-affix-wrapper > input.ant-input:-webkit-autofill,
+    .auth-scene-card .ant-input-affix-wrapper > input.ant-input:-webkit-autofill:hover,
+    .auth-scene-card .ant-input-affix-wrapper > input.ant-input:-webkit-autofill:focus {
+        /* 裁掉浏览器自动填充底色，让内层输入框继续透出外壳的背景与聚焦状态。 */
+        -webkit-background-clip: text !important;
+        background-clip: text !important;
+        box-shadow: none !important;
         -webkit-text-fill-color: var(--foreground) !important;
         caret-color: var(--foreground);
     }
