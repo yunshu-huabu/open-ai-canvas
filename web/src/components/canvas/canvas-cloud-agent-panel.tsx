@@ -666,6 +666,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         submissionRequestRef.current = true;
         setBusy(true);
         let accepted = false;
+        let requestSent = false;
         try {
             const effectiveModel = options?.requiresVision ? selectImageInspectionModel(config, selectedModel) : selectedModel;
             if (options?.requiresVision && !effectiveModel) throw new Error("当前没有配置支持图片输入的文本模型，请在模型能力设置中为一个文本模型开启图片输入后重试");
@@ -680,7 +681,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                 if (currentScope.current !== scope) return;
                 if (!capabilities.permissionModes.includes(permissionMode)) throw new Error("当前后端不支持所选 Agent 权限，请更新后端");
                 if (selectedSkillIds.length && !capabilities.skills) throw new Error("当前后端尚未接入技能库");
-                await saveRemoteUserDataNow();
+                await saveRemoteUserDataNow(canvasId);
                 if (currentScope.current !== scope) return;
                 const agentConfig = { ...config, model: effectiveModel };
                 const requestConfig = resolveModelRequestConfig(agentConfig, effectiveModel);
@@ -740,6 +741,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
             setPrompt("");
             prefilledSubmissionRef.current = null;
             setMessages(nextMessages);
+            requestSent = true;
             const result = submission.parentRunId ? await sendAgentMessage(submission.parentRunId, request) : await createAgentRun(request);
             accepted = true;
             if (currentScope.current === scope) {
@@ -763,7 +765,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
                     }
                 }
             }
-            setMessages((current) => appendAgentError(current, `submit-error-${activeConversationId}`, cause, agentSubmissionErrorTitle(cause, accepted)));
+            setMessages((current) => appendAgentError(current, `submit-error-${activeConversationId}`, cause, agentSubmissionErrorTitle(cause, accepted, requestSent)));
         } finally {
             submissionRequestRef.current = false;
             if (currentScope.current === scope) setBusy(false);
@@ -809,7 +811,7 @@ export function CanvasCloudAgentPanel({ canvasId, domainProjectId, nodeCount, se
         approvalRequestRef.current = approvalId;
         setApprovalSubmitting(true);
         try {
-            if (decision === "approve") await saveRemoteUserDataNow();
+            if (decision === "approve") await saveRemoteUserDataNow(canvasId);
             if (currentScope.current !== scope) return;
             await decideAgentApproval(runId, approvalId, decision, approval.reason, AbortSignal.timeout(15_000), mediaSettings);
             if (currentScope.current === scope) {
