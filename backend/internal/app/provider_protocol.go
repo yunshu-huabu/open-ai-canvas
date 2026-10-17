@@ -42,6 +42,13 @@ func declarativeProtocolPollPolicy(mode string) videoPollPolicy {
 }
 
 func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGenerationInput, adapter protocol.Adapter, policy videoPollPolicy) (map[string]interface{}, error) {
+	policy = normalizeVideoPollPolicy(policy)
+	if lifecycle := adapter.Metadata().Lifecycle; lifecycle != nil && lifecycle.PollIntervalMS > 0 {
+		policy.Interval = time.Duration(lifecycle.PollIntervalMS) * time.Millisecond
+		if policy.InitialDelay > 0 {
+			policy.InitialDelay = policy.Interval
+		}
+	}
 	// create、poll、download 是同一个外部任务的三个阶段：任一阶段失败都向上返回真实错误，
 	// 不把“已提交但结果未知”伪装成成功，也不把下载失败降级成空结果。
 	request := protocolRequestFromInput(input)
@@ -55,34 +62,23 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 			key = uuid.NewString()
 		}
 		request.Extra["idempotencyKey"] = key
+		if adapter.Metadata().Lifecycle != nil {
+			if _, err := adapter.BuildCreate(ctx, protocol.RequestContext{Request: request}); err != nil {
+				return nil, err
+			}
+			if err := prepareProtocolRequest(ctx, input, adapter, &request); err != nil {
+				return nil, err
+			}
+		}
 		spec, err := adapter.BuildCreate(ctx, protocol.RequestContext{BaseURL: input.Config.BaseURL, Request: request})
 		if err != nil {
 			return nil, err
 		}
-		body, streamedResult, err := executeProtocolCreateRequest(withProviderRequestKind(ctx, "create"), input, spec)
-		if err != nil {
-			return nil, err
-		}
-		if streamedResult != nil {
-			created = protocol.CreateResult{Status: protocol.StatusSucceeded, Result: streamedResult}
-		} else {
-			if parser, ok := adapter.(protocol.RequestAwareCreateParser); ok {
-				created, err = parser.ParseCreateWithRequest(ctx, request, body)
-			} else {
-				created, err = adapter.ParseCreate(ctx, body)
-			}
-		}
+		created, err = executeProtocolCreateWithRetry(ctx, input, adapter, spec, request, policy)
 		if err != nil {
 			return nil, err
 		}
 		taskID = created.TaskID
-		if taskID == "" {
-			extracted, extractErr := extractProviderTaskID(body)
-			if extractErr != nil {
-				return nil, extractErr
-			}
-			taskID = extracted
-		}
 		if created.Status == protocol.StatusFailed || created.Status == protocol.StatusCancelled {
 			return nil, protocolResultError(created.Message, taskID)
 		}

@@ -299,6 +299,9 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 			defer release()
 		}
 	}
+	if limit, ok := req.Context().Value(protocolReadLimitKey{}).(int64); ok && limit > 0 {
+		responseLimit = min(responseLimit, limit)
+	}
 	if _, err := ValidateOutboundURL(req.URL.String()); err != nil {
 		recordProviderRequest(req, startedAt, 0, nil, err)
 		return nil, "", err
@@ -315,6 +318,12 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 		return nil, "", err
 	}
 	defer resp.Body.Close()
+	if guard, ok := req.Context().Value(protocolResponseGuardKey{}).(func(*http.Response) error); ok && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if err := guard(resp); err != nil {
+			recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
+			return nil, "", err
+		}
+	}
 	if resp.ContentLength > responseLimit {
 		err = fmt.Errorf("上游响应超过 %s 限制", formatStorageLimit(responseLimit))
 		recordProviderRequest(req, startedAt, resp.StatusCode, nil, err)
@@ -357,6 +366,14 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 			_ = runtimeService.RecordChannelResult(req.Context(), channelID, resp.StatusCode >= 500)
 		}
 		httpErr := providerHTTPError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(data), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now())}
+		if httpErr.RetryAfter == 0 {
+			var payload struct {
+				RetryAfter float64 `json:"retry_after"`
+			}
+			if json.Unmarshal(data, &payload) == nil && payload.RetryAfter > 0 && payload.RetryAfter <= 86400 {
+				httpErr.RetryAfter = time.Duration(payload.RetryAfter * float64(time.Second))
+			}
+		}
 		recordProviderRequest(req, startedAt, resp.StatusCode, data, httpErr)
 		return nil, "", httpErr
 	}

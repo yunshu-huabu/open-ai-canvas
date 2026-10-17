@@ -164,26 +164,27 @@ type Parameter struct {
 }
 
 type Metadata struct {
-	ID                      string           `json:"id"`
-	Version                 string           `json:"version"`
-	Name                    string           `json:"name"`
-	Vendor                  string           `json:"vendor"`
-	Description             string           `json:"description,omitempty"`
-	Categories              []Capability     `json:"categories"`
-	Scopes                  []Surface        `json:"scopes"`
-	Parameters              []Parameter      `json:"parameters,omitempty"`
-	ImageParameters         []ImageParameter `json:"imageParameters,omitempty"`
-	Create                  string           `json:"-"`
-	Poll                    string           `json:"-"`
-	Cancel                  string           `json:"-"`
-	ContentType             string           `json:"-"`
-	Documentation           string           `json:"documentation,omitempty"`
-	LegacyAliases           []string         `json:"-"`
-	Enabled                 bool             `json:"enabled"`
-	Installable             bool             `json:"installable"`
-	Execution               string           `json:"-"`
-	RequiresPublicMediaURLs bool             `json:"-"`
-	UnavailableReason       string           `json:"-"`
+	ID                      string             `json:"id"`
+	Version                 string             `json:"version"`
+	Name                    string             `json:"name"`
+	Vendor                  string             `json:"vendor"`
+	Description             string             `json:"description,omitempty"`
+	Categories              []Capability       `json:"categories"`
+	Scopes                  []Surface          `json:"scopes"`
+	Parameters              []Parameter        `json:"parameters,omitempty"`
+	ImageParameters         []ImageParameter   `json:"imageParameters,omitempty"`
+	Create                  string             `json:"-"`
+	Poll                    string             `json:"-"`
+	Cancel                  string             `json:"-"`
+	ContentType             string             `json:"-"`
+	Documentation           string             `json:"documentation,omitempty"`
+	LegacyAliases           []string           `json:"-"`
+	Enabled                 bool               `json:"enabled"`
+	Installable             bool               `json:"installable"`
+	Execution               string             `json:"-"`
+	RequiresPublicMediaURLs bool               `json:"-"`
+	UnavailableReason       string             `json:"-"`
+	Lifecycle               *ManifestLifecycle `json:"-"`
 }
 
 // Manifest is the single plugin contract. A plugin may contribute providers,
@@ -349,6 +350,32 @@ type ManifestProvider struct {
 	Result                  *ManifestOperation     `json:"result,omitempty"`
 	Response                ManifestResponse       `json:"response"`
 	AgentResponse           *ManifestAgentResponse `json:"agentResponse,omitempty"`
+	Lifecycle               *ManifestLifecycle     `json:"lifecycle,omitempty"`
+}
+
+// Lifecycle describes preparation and delivery without executing plugin code.
+type ManifestLifecycle struct {
+	Prepare        []ManifestPreparation         `json:"prepare,omitempty"`
+	MediaLimits    map[string]ManifestMediaLimit `json:"mediaLimits,omitempty"`
+	CreateAttempts int                           `json:"createAttempts,omitempty"`
+	PollIntervalMS int                           `json:"pollIntervalMs,omitempty"`
+	OriginalMP4    bool                          `json:"originalMp4,omitempty"`
+	RequestBytes   int64                         `json:"requestBytes,omitempty"`
+}
+
+type ManifestMediaLimit struct {
+	MIMETypes  []string `json:"mimeTypes"`
+	FileBytes  int64    `json:"fileBytes"`
+	TotalBytes int64    `json:"totalBytes"`
+}
+
+type ManifestPreparation struct {
+	ID          string               `json:"id"`
+	Source      string               `json:"source,omitempty"`
+	Operation   ManifestOperation    `json:"operation"`
+	Value       any                  `json:"value"`
+	Validations []ManifestValidation `json:"validations,omitempty"`
+	Message     any                  `json:"message,omitempty"`
 }
 
 type ManifestAuth struct {

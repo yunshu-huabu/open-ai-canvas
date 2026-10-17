@@ -277,7 +277,7 @@ func ValidateManifest(manifest Manifest) error {
 	if len(manifest.Contributes.Providers) == 0 && !hasNonProviderContribution(manifest.Contributes) {
 		return fmt.Errorf("plugin must declare at least one contribution")
 	}
-	if backend := strings.TrimSpace(manifest.Runtime.Backend); backend != "" && backend != "declarative" && backend != "rpc" && backend != "wasm" && backend != "trusted-backend" && !strings.HasPrefix(backend, "host:") {
+	if backend := strings.TrimSpace(manifest.Runtime.Backend); backend != "" && backend != "declarative" && backend != "declarative-lifecycle" && backend != "rpc" && backend != "wasm" && backend != "trusted-backend" && !strings.HasPrefix(backend, "host:") {
 		return fmt.Errorf("unsupported plugin backend %q", backend)
 	}
 	if len(manifest.Contributes.Providers) == 0 {
@@ -342,6 +342,31 @@ func ValidateManifest(manifest Manifest) error {
 		if provider.Result != nil {
 			if err := validateManifestOperation(*provider.Result); err != nil {
 				return fmt.Errorf("provider %q result operation: %w", provider.ID, err)
+			}
+		}
+		if lifecycle := provider.Lifecycle; lifecycle != nil {
+			if lifecycle.CreateAttempts < 0 || lifecycle.CreateAttempts > 3 || lifecycle.PollIntervalMS < 0 || lifecycle.PollIntervalMS > 60000 || lifecycle.RequestBytes < 0 || lifecycle.RequestBytes > 128<<20 {
+				return fmt.Errorf("provider %q lifecycle retry or polling limit is invalid", provider.ID)
+			}
+			seen := map[string]bool{}
+			for _, step := range lifecycle.Prepare {
+				if step.ID == "" || seen[step.ID] || strings.ContainsAny(step.ID, ".[]") || (step.Source != "" && step.Source != "images") {
+					return fmt.Errorf("provider %q preparation id or source is invalid", provider.ID)
+				}
+				seen[step.ID] = true
+				if err := validateManifestOperation(step.Operation); err != nil {
+					return err
+				}
+				for _, rule := range step.Validations {
+					if rule.Assert == nil || rule.Message == "" {
+						return fmt.Errorf("preparation validation requires assert and message")
+					}
+				}
+			}
+			for kind, limit := range lifecycle.MediaLimits {
+				if (kind != "images" && kind != "videos" && kind != "audios") || limit.FileBytes <= 0 || limit.TotalBytes < limit.FileBytes || limit.TotalBytes > 2<<30 || len(limit.MIMETypes) == 0 {
+					return fmt.Errorf("provider %q media limits are invalid", provider.ID)
+				}
 			}
 		}
 		for ruleIndex, rule := range provider.Validations {
@@ -416,6 +441,7 @@ func normalizeManifestForProvider(manifest *Manifest, index int) error {
 	manifest.Metadata.Cancel = operationSummaryPtr(provider.Cancel)
 	manifest.Metadata.ContentType = provider.Create.ContentType
 	manifest.Metadata.RequiresPublicMediaURLs = provider.RequiresPublicMediaURLs
+	manifest.Metadata.Lifecycle = provider.Lifecycle
 	manifest.Metadata.Execution = manifest.Runtime.Backend
 	manifest.Create = provider.Create
 	manifest.Agent = provider.Agent

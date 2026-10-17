@@ -5,6 +5,13 @@ description: 从产品功能快速定位主要代码入口
 
 # 代码功能地图
 
+## Vinted Seedance 视频
+
+- 插件生成源：`plugin-packages/generate-catalog.mjs` 的 `vinted-seedance-video`；包、Manifest 与字段说明位于同名 `.yingce-plugin` 和目录。
+- 签名 JSON 结果解析、原片下载重试与相对 URL 解析：`backend/internal/app/provider_protocol_result.go`；继续复用声明式适配器的响应映射与现有出站鉴权/SSRF 边界。
+- 生命周期合同与表达式：`internal/protocol/types.go`、`preparation.go`；准备、价格余额预检、上传与固定正文重试：`app/provider_protocol_prepare.go`；原片响应和同版本续传：`provider_protocol_download.go`。前后端能力默认值在各自的 `model_capability_defaults.go` / `model-capabilities.ts`；参数入口与提交映射为 `VideoSettingsPanel` 和 `generation-task.ts`。
+- 协议与运行测试：`backend/internal/protocol/vinted_video_test.go`、`backend/internal/app/vinted_video_test.go`。
+
 ## 用户登录日志
 
 - 持久化：`backend/internal/model/models_login_log.go`、`repository/login_logs.go`；会话与日志原子提交在 `repository/account.go`，schema v53 在 `database/migrations.go`。

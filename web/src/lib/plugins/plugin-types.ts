@@ -35,7 +35,7 @@ export type PluginContributionKind = "provider" | "payment-provider" | "workflow
 export type PluginSurface = "node" | "fullscreen" | "hybrid" | "asset-source" | "settings" | "wallet";
 export type ProtocolCapability = "text" | "image" | "video" | "audio";
 export type ProtocolScope = "admin.system-channel" | "user.custom-channel" | "canvas" | "creation" | "agent" | string;
-export type PluginRuntime = "declarative" | "sandbox" | "worker" | "trusted-backend";
+export type PluginRuntime = "declarative" | "declarative-lifecycle" | "sandbox" | "worker" | "trusted-backend";
 export type PluginField = {
     name: string;
     type: "string" | "number" | "boolean" | "secret" | "url" | "select" | "json";
@@ -58,6 +58,17 @@ export type PluginProviderOperation = {
     path: string;
     contentType?: string;
     fields?: Record<string, string>;
+    body?: unknown;
+    headers?: Record<string, unknown>;
+    query?: Record<string, unknown>;
+};
+export type PluginLifecycle = {
+    createAttempts?: number;
+    pollIntervalMs?: number;
+    originalMp4?: boolean;
+    requestBytes?: number;
+    mediaLimits?: Record<string, { mimeTypes: string[]; fileBytes: number; totalBytes: number }>;
+    prepare?: { id: string; source?: "images"; operation: PluginProviderOperation; value: unknown; validations?: { assert: unknown; message: string }[]; message?: unknown }[];
 };
 export type PluginProviderContribution = {
     id: string;
@@ -70,6 +81,8 @@ export type PluginProviderContribution = {
     create: PluginProviderOperation;
     poll?: PluginProviderOperation;
     cancel?: PluginProviderOperation;
+    result?: PluginProviderOperation;
+    lifecycle?: PluginLifecycle;
     response: {
         taskIdPaths?: string[];
         statusPaths?: string[];

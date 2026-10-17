@@ -115,6 +115,14 @@ eagle-asset-connector.yingce-plugin
 
 带 Web 功能的包增加 `entry: "web/entry.js"`、`runtime.web: "sandbox"` 或 `"worker"`。上传入口只接受 `.yingce-plugin`，服务端会校验 ZIP 路径、大小、重复文件、Manifest 和入口文件，不执行包内 JavaScript；当前版本先完成包校验、存储和入口合同，未授权的 Web 代码不会自动进入主页面。Provider 仍由后端声明式运行时执行；UI/功能代码通过隔离运行时和权限化宿主 API 接入。
 
+Provider 的 `result` 可以返回二进制媒体或 JSON 签名地址。JSON 响应沿用同一 Provider 的 `response` 映射，必须解析为成功状态和对应媒体结果；随后由宿主下载并保存，下载重试会重新获取签名。相对结果 URL 按渠道 Base URL 解析，签名参数原样保留；跨源下载不携带渠道 Key 和自定义请求头，出站仍受 SSRF 校验。
+
+`vinted-seedance-video` 2.1.0 仅对应 [Vinted 视频文档](https://vinted.cam/developers) 的四个 Seedance 主模块模型。提交前读取目录、本人价格和余额，报价包含适用的原生人脸附加费并显示在任务进度；图片逐张自动上传，音视频以原始 Base64 提交，不要求资源有公网地址。默认能力与界面按四个模型分别限制时长、720p 和素材数量，视频设置提供运镜与原生人脸选项。
+
+插件声明 `runtime.backend: declarative-lifecycle`，旧后端会拒绝安装，必须同步升级宿主。Provider 的 `lifecycle` 合同包括：`prepare`（同源操作、可选 images 遍历、响应断言与结果赋值）、`mediaLimits`（实际格式和字节数）、`requestBytes`（JSON 体积）、`createAttempts`（最多三次、必须有宿主幂等键）、`pollIntervalMs`（最长 60 秒）和 `originalMp4`（原片响应与续传校验）。准备结果仅存在本次执行内存的 `request.extra.preparation`，不执行包内脚本；任一准备步骤失败即停止生成。
+
+原片获取要求签名 JSON 的 `quality` 与文件 `X-Video-Quality` 均为 `original`，并校验 MP4 内容特征；签名文件请求不附加渠道凭据。同次执行中用 Range/If-Range、ETag 和 Content-Range 验证续传，签名过期则重新获取原任务签名。创建瞬态错误或缺少任务 ID 时，使用相同操作编号和请求体重试；恢复已取得 ID 的任务只查询。进程重启且没有保存任务 ID 时仍沿用保守暂停规则，需要人工核对，不能自动新建订单。前端 Agent 审批尚不编辑厂商扩展参数，使用渠道模型默认值。完整字段与安装说明见 `plugin-packages/vinted-seedance-video/docs/interface.md`。
+
 字段约束：
 
 - `id`：全局唯一，使用小写 kebab-case；安装后不能随意变更。

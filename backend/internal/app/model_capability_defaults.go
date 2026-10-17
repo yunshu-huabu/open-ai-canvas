@@ -170,6 +170,22 @@ func DefaultModelCapabilityConfigForModel(protocol string, modelName string) *Mo
 		DefaultOperation:  "text_to_video",
 	}
 	switch model.ChannelInterfaceType(protocol) {
+	case "vinted-seedance-video":
+		is25 := modelName == "seedance2.5"
+		video.References.PromptMaxChars = 15000
+		video.References.MaxImages, video.References.MaxVideos, video.References.MaxAudios = 9, 3, 3
+		if is25 {
+			video.References.MaxImages, video.References.MaxVideos, video.References.MaxAudios = 30, 10, 10
+		}
+		video.References.MaxImageBytes, video.References.MaxVideoBytes, video.References.MaxAudioBytes = 50<<20, 50<<20, 50<<20
+		video.Duration = VideoDurationConfig{Selection: "enum", Values: []int{5, 10, 15}, Default: 5}
+		if is25 {
+			video.Duration = VideoDurationConfig{Selection: "range", Min: 16, Max: 30, Step: 1, Default: 30}
+		} else if modelName == "seedance2.0mini" {
+			video.Duration.Values = []int{5, 10}
+		}
+		video.Resolutions = []string{"720p"}
+		video.Operations = append(video.Operations, "reference_to_video", "audio_to_video")
 	case model.ChannelInterfaceVolcengineJiMengVideo:
 		video.Duration = VideoDurationConfig{Selection: "enum", Values: []int{5, 10}, Default: 5}
 		video.Resolutions = []string{"720p"}

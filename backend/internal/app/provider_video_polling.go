@@ -178,6 +178,10 @@ func retryableVideoPollError(ctx context.Context, err error) (retry bool, notFou
 		return false, false
 	}
 	var downloadError videoDownloadError
+	var expiredLink signedMediaLinkError
+	if errors.As(err, &expiredLink) {
+		return true, false
+	}
 	if errors.As(err, &downloadError) {
 		return false, false
 	}

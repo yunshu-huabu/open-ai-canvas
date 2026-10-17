@@ -20,19 +20,20 @@ const sizeOptions = [
 
 type VideoSettingsPanelProps = {
     config: AiConfig;
-    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", value: string) => void;
+    onConfigChange: (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload" | "videoCameraMovement" | "videoNativeFace", value: string) => void;
     theme: CanvasTheme;
     showTitle?: boolean;
+    showProviderOptions?: boolean;
     className?: string;
 };
 
-export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, className = "w-[292px] space-y-3" }: VideoSettingsPanelProps) {
+export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = true, showProviderOptions = true, className = "w-[292px] space-y-3" }: VideoSettingsPanelProps) {
     const profile = modelCapabilityConfigFor(config, config.model).video!;
 	const priceTiers = modelPriceTiers(config);
     if (resolveModelRequestConfig(config, config.model).interfaceType === "volcengine-jimeng-video") {
 		return <JiMengVideoSettingsPanel config={config} profile={profile} priceTiers={priceTiers} onConfigChange={onConfigChange} theme={theme} showTitle={showTitle} className={className} />;
     }
-    if (isSeedanceVideoConfig(config)) {
+    if (isSeedanceVideoConfig(config) && resolveModelRequestConfig(config, config.model).interfaceType !== "vinted-seedance-video") {
 		return <SeedanceVideoSettingsPanel config={config} profile={profile} priceTiers={priceTiers} onConfigChange={onConfigChange} theme={theme} showTitle={showTitle} className={className} />;
     }
 
@@ -83,10 +84,18 @@ export function VideoSettingsPanel({ config, onConfigChange, theme, showTitle = 
                 <SettingGroup title="秒数" color={theme.node.muted}>
 					<VideoDurationControl profile={profile} value={Number(seconds)} theme={theme} disabled={(value) => !hasPriceTierForVideoSelection(priceTiers, resolution, value)} onChange={(value) => onConfigChange("videoSeconds", String(value))} />
                 </SettingGroup>
+                {showProviderOptions && resolveModelRequestConfig(config, config.model).interfaceType === "vinted-seedance-video" ? <VintedVideoOptions config={config} onConfigChange={onConfigChange} theme={theme} /> : null}
                 {profile.generateAudio.supported || profile.watermark.supported ? <SettingGroup title="输出" color={theme.node.muted}><div className="grid grid-cols-2 gap-3 rounded-md px-2" style={{ background: theme.toolbar.itemHover }}>{profile.generateAudio.supported ? <SwitchRow label="生成声音" checked={generateAudio} theme={theme} onChange={(checked) => onConfigChange("videoGenerateAudio", String(checked))} /> : null}{profile.watermark.supported ? <SwitchRow label="添加水印" checked={watermark} theme={theme} onChange={(checked) => onConfigChange("videoWatermark", String(checked))} /> : null}</div></SettingGroup> : null}
             </div>
         </ImageSettingsTheme>
     );
+}
+
+function VintedVideoOptions({ config, onConfigChange, theme }: VideoSettingsPanelProps) {
+    return <>
+        <SettingGroup title="运镜" color={theme.node.muted}><div className="grid grid-cols-3 gap-1.5">{[["", "默认"], ["auto", "自动"], ["fixed", "固定"]].map(([value, label]) => <OptionPill key={value} selected={(config.videoCameraMovement ?? "") === value} theme={theme} onClick={() => onConfigChange("videoCameraMovement", value)}>{label}</OptionPill>)}</div></SettingGroup>
+        {Number(config.videoSeconds) <= 15 ? <SettingGroup title="原生人脸" color={theme.node.muted}><div className="grid grid-cols-3 gap-1.5">{[["", "默认"], ["true", "开启"], ["false", "关闭"]].map(([value, label]) => <OptionPill key={value} selected={(config.videoNativeFace ?? "") === value} theme={theme} onClick={() => onConfigChange("videoNativeFace", value)}>{label}</OptionPill>)}</div><p className="mt-1 text-xs" style={{ color: theme.node.muted }}>需参考图片或视频；可能加收积分，提交时按本人价格检查。</p></SettingGroup> : null}
+    </>;
 }
 
 function JiMengVideoSettingsPanel({ config, profile, priceTiers, onConfigChange, theme, showTitle, className }: VideoSettingsPanelProps & { profile: VideoCapabilityConfig; priceTiers: ReturnType<typeof modelPriceTiers> }) {

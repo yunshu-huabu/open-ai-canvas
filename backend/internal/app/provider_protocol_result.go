@@ -104,8 +104,38 @@ func finishProtocolAdapterResult(ctx context.Context, input canvasGenerationInpu
 	if err != nil {
 		return nil, err
 	}
+	var downloadState protocolDownloadState
 	download := func(ctx context.Context) ([]byte, string, error) {
-		return executeProtocolBinaryRequest(withProviderRequestKind(ctx, "download"), input.Config, spec)
+		data, mimeType, err := executeProtocolBinaryRequest(withProviderRequestKind(ctx, "download"), input.Config, spec)
+		if err != nil || !strings.Contains(strings.ToLower(mimeType), "json") {
+			return data, mimeType, err
+		}
+		// Some result endpoints mint a signed URL instead of returning the media.
+		// Reuse the response mapping and refresh the signature on each download retry.
+		state, err := adapter.ParsePoll(ctx, protocol.PollContext{BaseURL: input.Config.BaseURL, Model: request.Model, Request: request, TaskID: taskID}, data)
+		if err != nil {
+			return nil, "", err
+		}
+		if state.Status != protocol.StatusSucceeded || !protocolResultHasOutput(input.Mode, state.Result) {
+			return nil, "", protocolResultError(state.Message, taskID)
+		}
+		var reference protocol.MediaReference
+		switch input.Mode {
+		case "image":
+			reference = state.Result.Images[0]
+		case "video":
+			reference = state.Result.Videos[0]
+		case "audio":
+			reference = state.Result.Audios[0]
+		}
+		if lifecycle := adapter.Metadata().Lifecycle; lifecycle != nil && lifecycle.OriginalMP4 {
+			return downloadProtocolOriginal(withProviderRequestKind(ctx, "download"), input.Config, reference.URL, &downloadState)
+		}
+		data, mimeType, err = protocolMediaBytesOnce(ctx, input.Config, reference)
+		if err == nil && strings.Contains(strings.ToLower(mimeType), "json") {
+			return nil, "", errors.New("声明式协议签名地址未返回媒体文件")
+		}
+		return data, mimeType, err
 	}
 	var data []byte
 	var mimeType string
@@ -185,6 +215,15 @@ func protocolMediaBytesOnce(ctx context.Context, config providerConfig, referenc
 	if value == "" {
 		return nil, "", errors.New("声明式协议媒体结果地址为空")
 	}
+	base, err := url.Parse(config.BaseURL)
+	if err != nil {
+		return nil, "", err
+	}
+	target, err := url.Parse(value)
+	if err != nil {
+		return nil, "", err
+	}
+	value = base.ResolveReference(target).String()
 	data, mimeType, err := getProviderExternalBinary(withProviderRequestKind(ctx, "download"), config, value)
 	return data, normalizedMediaMimeType(mimeType, data), err
 }

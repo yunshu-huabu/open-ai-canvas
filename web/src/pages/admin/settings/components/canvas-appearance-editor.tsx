@@ -3,7 +3,7 @@ import { Alert, App, Button, Form, Input, InputNumber, Radio } from "antd";
 import { ExternalLink, Upload } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { Live2DAvatar } from "@/components/canvas/live2d-avatar";
-import { FluidOrb } from "@/components/ui/fluid-orb";
+import { CanvasAgentMascot } from "@/components/canvas/canvas-agent-mascot";
 import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
 import { live2DModelURL, uploadLive2D } from "@/services/api/appearance";
 
@@ -67,7 +67,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                     disabled={disabled || uploading}
                     onChange={(event) => change({ avatarType: event.target.value })}
                     options={[
-                        { label: "默认动态球", value: "orb" },
+                        { label: "默认星环机器人", value: "orb" },
                         { label: "Live2D", value: "live2d", disabled: !url || readyURL !== url },
                     ]}
                 />
@@ -127,7 +127,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             width={Math.round(value.avatarHeight * 0.75)}
                             height={value.avatarHeight}
                             reducedMotion={reducedMotion}
-                            fallback={<FluidOrb size={60} color="#7164f6" />}
+                            fallback={<span className="block w-20"><CanvasAgentMascot /></span>}
                             onReady={() => {
                                 setReadyURL(url);
                                 setError("");
@@ -138,7 +138,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             }}
                         />
                     ) : (
-                        <FluidOrb size={60} color="#7164f6" />
+                        <span className="block w-20"><CanvasAgentMascot /></span>
                     )}
                     <strong>{agentCopy(value.welcomeTitle, value.agentName)}</strong>
                     <p className="text-sm text-foreground/60">{agentCopy(value.welcomeDescription, value.agentName)}</p>

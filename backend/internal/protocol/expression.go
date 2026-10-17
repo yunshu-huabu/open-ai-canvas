@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -76,6 +77,37 @@ func evaluateManifestOperator(operator string, operand any, env map[string]any) 
 		return manifestPathValue(env, path), nil
 	case "$literal":
 		return operand, nil
+	case "$matches":
+		args, ok := operand.([]any)
+		if !ok || len(args) != 2 {
+			return nil, fmt.Errorf("$matches requires [value, pattern]")
+		}
+		value, err := evaluateManifestValue(args[0], env)
+		if err != nil {
+			return nil, err
+		}
+		pattern, ok := args[1].(string)
+		if !ok {
+			return nil, fmt.Errorf("$matches requires a literal pattern")
+		}
+		return regexp.MatchString(pattern, manifestString(value))
+	case "$unique":
+		value, err := evaluateManifestValue(operand, env)
+		if err != nil {
+			return nil, err
+		}
+		items, seen := []any{}, map[string]bool{}
+		for _, item := range manifestArray(value) {
+			encoded, err := json.Marshal(item)
+			if err != nil {
+				return nil, err
+			}
+			if !seen[string(encoded)] {
+				seen[string(encoded)] = true
+				items = append(items, item)
+			}
+		}
+		return items, nil
 	case "$coalesce", "$default":
 		values, ok := operand.([]any)
 		if !ok {

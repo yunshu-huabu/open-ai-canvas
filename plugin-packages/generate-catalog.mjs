@@ -741,6 +741,76 @@ add({
   })
 });
 
+const vintedOptions = "request.providerOptions.vinted-seedance-video";
+const vintedIs25 = eq(ref("request.model"), "seedance2.5");
+const vintedDuration = conditional(eq(ref("request.duration"), 0), conditional(vintedIs25, 30, 5), ref("request.duration"));
+const vintedImageCount = addNumbers(len(ref("request.images")), len(ref(`${vintedOptions}.image_ids`)));
+const vintedHasVisuals = gt(addNumbers(vintedImageCount, len(ref("request.videos"))), 0);
+const vintedNativeFace = and(lte(vintedDuration, 15), vintedHasVisuals, coalesce(ref(`${vintedOptions}.native_face`), true));
+const vintedPrice = first(map(filter(ref("response.items"), "price", and(eq(ref("price.model"), ref("request.model")), eq(ref("price.duration"), vintedDuration))), "price", ref("price.credits")));
+const vintedCharge = addNumbers(vintedPrice, conditional(vintedNativeFace, coalesce(ref("response.native_face_surcharge_credits"), 0), 0));
+add({
+  id: "vinted-seedance-video", providerId: "vinted-seedance-video", name: "Vinted Seedance Video", vendor: "Vinted / 影策", capability: "video",
+  baseUrl: "https://vinted.cam", auth: bearer, requiresPublicMediaUrls: false, version: "2.1.0",
+  params: videoParams.filter(([name]) => !["generateAudio", "watermark"].includes(name)),
+  notes: "仅对应 https://vinted.cam/developers 主模块的四个 Seedance 模型，不包含其他模型。安装包使用 declarative-lifecycle 运行时，必须同时更新本轮后端；旧宿主会拒绝安装，避免漏传参考素材。渠道地址填 https://vinted.cam（不含 /v1），API Key 填原 sk- Key。2.5 为 16–30 秒整数（默认 30），2.0/Fast 为 5/10/15 秒（默认 5），Mini 为 5/10 秒（默认 5）；分辨率仅 720p。\n\n每次创建前读取 /v1/catalog、带 Key 的 /v1/pricing 和 /v1/balance，校验可售时长、本人价格和余额；报价包含适用的原生人脸附加费，报价与余额写入任务进度，最终以账单为准。页面的模型下拉列表仍由渠道模型配置管理，不自动新增模型。\n\n宿主读取归属校验后的本地资源或公网直链，校验实际格式与字节大小，图片逐张以 image_b64 上传 /v1/files，音频和视频以 audio_b64s/video_b64s 原始文件提交。上传图片单张 50 MiB；音视频单条 50 MiB、每类合计 60 MiB，JSON 总体积仍受上游限制。每次新任务重新上传图片，不持久缓存一小时有效的上传 ID。可通过 providerOptions.vinted-seedance-video.image_ids 追加已有有效图片 ID（须合法且不重复）；已有 ID 排在自动上传图片之前，过期且没有原文件的 ID 必须由用户重新提供，不能静默删除素材。2.5 图片/视频/音频上限分别为 30/10/10，其余为 9/3/3。三类素材各自按 order 排序，对应 @图片N、@视频N、@音频N。\n\n视频设置提供运镜和原生人脸选项，也可通过渠道模型 defaultOptions.camera_movement（auto/fixed）和 native_face（布尔值）配置。超过 15 秒时原生人脸自动无效；15 秒内开启须有参考图或视频。省略时保留上游默认，可能自动开启并加收积分。\n\n创建异常、空响应或任务 ID 缺失时最多三次使用同一 Idempotency-Key 与相同正文重试；429 支持响应头和 JSON retry_after。收到任务 ID 后只查询原任务，每 5 秒轮询。进程重启且创建响应未保存为任务 ID 时仍遵守宿主的保守暂停规则，不自动创建新订单，需核对原任务。\n\n原片使用 /signed_url?download=1，验证 quality=original、文件 X-Video-Quality=original、Content-Type 和 MP4 文件头。签名地址无需鉴权，不附加渠道 Key；过期则重新获取同任务签名。下载中断时，在同次执行中使用 Range/If-Range 和 ETag 续传，严格检查版本与字节范围；进程重启后重新下载，不持久保存半文件。文件成功保存前不报告完成。未使用真实 Key 联调或创建计费任务。",
+  validations: [
+    { assert: gt(len(trim(ref("request.extra.idempotencyKey"))), 0), message: "Vinted 创建视频必须由宿主提供 Idempotency-Key，请升级后端" },
+    { assert: { $in: [ref("request.model"), ["seedance2.5", "seedance2.0", "seedance2.0fast", "seedance2.0mini"]] }, message: "Vinted 主模块仅支持四个 Seedance 模型，不支持 niulai/C4/C6" },
+    { assert: and(gt(len(trim(ref("request.prompt"))), 0), lte(len(ref("request.prompt")), 15000)), message: "Vinted 提示词须为 1–15000 字符" },
+    { assert: conditional(vintedIs25, { $in: [vintedDuration, Array.from({ length: 15 }, (_, i) => i + 16)] }, { $in: [vintedDuration, conditional(eq(ref("request.model"), "seedance2.0mini"), [5, 10], [5, 10, 15])] }), message: "Vinted 时长不合法：2.5 为 16–30 秒整数，2.0/Fast 为 5/10/15，Mini 为 5/10" },
+    { assert: { $in: [ref("request.aspectRatio"), ["", "1:1", "3:4", "4:3", "9:16", "16:9", "21:9"]] }, message: "Vinted 不支持此画幅比例" },
+    { assert: { $in: [coalesce(ref("request.resolution"), "720p"), ["720p"]] }, message: "Vinted 主模块仅支持 720p" },
+    { assert: { $or: [eq(len(ref(`${vintedOptions}.camera_movement`)), 0), { $in: [ref(`${vintedOptions}.camera_movement`), ["auto", "fixed"]] }] }, message: "Vinted 运镜仅支持 auto 或 fixed" },
+    { assert: { $in: [coalesce(ref(`${vintedOptions}.native_face`), false), [true, false]] }, message: "Vinted native_face 必须是布尔值" },
+    { assert: lte(vintedImageCount, conditional(vintedIs25, 30, 9)), message: "Vinted 参考图数量超限（含 image_ids）" },
+    ...["videos", "audios"].map((kind) => ({ assert: lte(len(ref(`request.${kind}`)), conditional(vintedIs25, 10, 3)), message: "Vinted 参考音视频数量超限" })),
+    { assert: eq(len(ref(`${vintedOptions}.image_ids`)), len({ $unique: ref(`${vintedOptions}.image_ids`) })), message: "Vinted 图片 ID 不能重复" },
+    { assert: eq(len(filter(ref(`${vintedOptions}.image_ids`), "id", { $not: { $matches: [ref("id"), "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"] } })), 0), message: "Vinted 图片 ID 格式不合法" },
+    { assert: { $or: [{ $not: ref(`${vintedOptions}.native_face`) }, gt(vintedDuration, 15), vintedHasVisuals] }, message: "15 秒以内开启原生人脸须提供参考图片或视频" }
+  ],
+  lifecycle: {
+    pollIntervalMs: 5000, createAttempts: 3, originalMp4: true, requestBytes: 96*1024*1024,
+    mediaLimits: {
+      images: { mimeTypes: ["image/png", "image/jpeg", "image/webp"], fileBytes: 50*1024*1024, totalBytes: 30*50*1024*1024 },
+      audios: { mimeTypes: ["audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/wav", "audio/ogg", "audio/flac"], fileBytes: 50*1024*1024, totalBytes: 60*1024*1024 },
+      videos: { mimeTypes: ["video/mp4", "video/quicktime", "video/webm"], fileBytes: 50*1024*1024, totalBytes: 60*1024*1024 }
+    },
+    prepare: [
+      { id: "catalog", operation: { method: "GET", path: "/v1/catalog" }, value: true,
+        validations: [{ assert: gt(len(filter(ref("response.models"), "model", and(eq(ref("model.id"), ref("request.model")), { $in: [vintedDuration, ref("model.durations")] }))), 0), message: "当前模型或时长已不在上游目录中" }] },
+      { id: "pricing", operation: { method: "GET", path: "/v1/pricing" }, value: { credits: vintedCharge },
+        validations: [
+          { assert: { $matches: [vintedPrice, "^[1-9][0-9]*$"] }, message: "当前账号没有所选模型和时长的有效整数价格" },
+          { assert: conditional(vintedNativeFace, { $matches: [ref("response.native_face_surcharge_credits"), "^(0|[1-9][0-9]*)$"] }, true), message: "上游未返回有效的原生人脸附加费，无法确认本次报价" }
+        ],
+        message: { $concat: ["上游本次报价：", vintedCharge, " 积分（包含原生人脸附加费）；最终以账单为准"] } },
+      { id: "balance", operation: { method: "GET", path: "/v1/balance" }, value: ref("response.balance"),
+        validations: [{ assert: gte(ref("response.balance"), ref("request.extra.preparation.pricing.credits")), message: "上游账户积分不足，请充值后恢复原任务" }],
+        message: { $concat: ["上游当前余额：", ref("response.balance"), " 积分"] } },
+      { id: "images", source: "images", operation: jsonCreate("/v1/files", { image_b64: ref("request.extra.prepareItem.dataUrl") }), value: ref("response.image_id"),
+        validations: [{ assert: { $matches: [ref("response.image_id"), "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"] }, message: "上游图片上传未返回有效 ID，已停止生成" }] }
+    ]
+  },
+  create: jsonCreate("/v1/videos", {
+    model: ref("request.model"), prompt: ref("request.prompt"), duration: vintedDuration,
+    ratio: omit(ref("request.aspectRatio")), resolution: coalesce(ref("request.resolution"), "720p"),
+    camera_movement: omit(ref(`${vintedOptions}.camera_movement`)), native_face: ref(`${vintedOptions}.native_face`),
+    image_ids: omit({ $concatArrays: [ref(`${vintedOptions}.image_ids`), ref("request.extra.preparation.images")] }),
+    video_b64s: omit(map(sorted(ref("request.videos")), "media", ref("media.dataUrl"))),
+    audio_b64s: omit(map(sorted(ref("request.audios")), "media", ref("media.dataUrl")))
+  }, { headers: { "Idempotency-Key": ref("request.extra.idempotencyKey"), "User-Agent": "vinted-video-client/1.0" } }),
+  poll: { method: "GET", path: "/v1/videos/{{taskId}}", headers: { "User-Agent": "vinted-video-client/1.0" } },
+  result: { method: "GET", path: "/v1/videos/{{taskId}}/signed_url", query: { download: "1" }, headers: { "User-Agent": "vinted-video-client/1.0" } },
+  response: {
+    taskId: coalesce(ref("response.id"), ref("taskId")),
+    status: conditional(eq(ref("response.quality"), "original"), "succeeded", coalesce(ref("response.status"), "failed")),
+    videos: conditional(eq(ref("response.quality"), "original"), ref("response.url")),
+    message: coalesce(ref("response.error.message"), ref("response.error"), ref("response.message"), "原片签名响应未确认 quality=original 或未提供有效地址，请恢复原任务"),
+    errorPaths: ["error"], resultEphemeral: true
+  }
+});
+
 add({
   id: "rolldek-wan-video", providerId: "rolldek-wan-video", name: "RollDek WAN 3.0 Video", vendor: "RollDek", capability: "video",
   baseUrl: "https://rolldek.com", auth: bearer, params: videoParams, requiresPublicMediaUrls: true,
@@ -1280,9 +1350,10 @@ for (const [id, name, capability, createPath, pollPath, resultPath] of [
 function manifestFor(spec) {
   return {
     apiVersion: "yingce.plugin/v2",
+    ...(spec.lifecycle ? { runtime: { backend: "declarative-lifecycle" } } : {}),
     id: spec.id,
     name: spec.name,
-    version: "2.0.0",
+    version: spec.version || "2.0.0",
     author: `${spec.vendor} / 影策`,
     description: `${spec.name} 独立请求协议插件。`,
     documentation: `# ${spec.name}\n\n完整字段、映射、响应、鉴权和兼容边界见包内 README.md 与 docs/interface.md。\n\n## 影策运行时合同\n\n用户只操作统一的文本、图片或视频能力；插件负责把统一请求转换为 ${spec.name} 上游协议。`,
@@ -1299,6 +1370,7 @@ function manifestFor(spec) {
         auth: spec.auth,
         parameters: parameters(spec.params),
         ...(spec.validations ? { validations: spec.validations } : {}),
+        ...(spec.lifecycle ? { lifecycle: spec.lifecycle } : {}),
         create: spec.create,
         ...(spec.agent ? { agent: spec.agent } : {}),
         ...(spec.poll ? { poll: spec.poll } : {}),

@@ -1,5 +1,6 @@
 import { ArrowUpRight, Clapperboard, Layers3, Sparkles } from "lucide-react";
 import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
+import { CanvasAgentMascot } from "./canvas-agent-mascot";
 
 type AgentWelcomeProps = {
     appearance: CanvasAppearance;
@@ -12,7 +13,7 @@ export function AgentWelcome({ appearance, nodeCount, onChooseSkill, onDraftProm
     return (
         <section className="agent-welcome" aria-label="开始 Agent 创作">
             <div className="agent-welcome-intro">
-                <span className="agent-welcome-orb" aria-hidden="true" />
+                <span className="agent-welcome-mascot" aria-hidden="true"><CanvasAgentMascot /></span>
                 <h2>{agentCopy(appearance.welcomeTitle, appearance.agentName)}</h2>
                 <p>{agentCopy(appearance.welcomeDescription, appearance.agentName)}</p>
             </div>

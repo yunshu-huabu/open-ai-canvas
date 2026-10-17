@@ -336,8 +336,14 @@ function generationMetadata(config: AiConfig, metadata?: Record<string, unknown>
         ? existing[protocol] as Record<string, unknown>
         : {};
     const defaults = modelCost?.defaultOptions && typeof modelCost.defaultOptions === "object" ? modelCost.defaultOptions : {};
-    if (!Object.keys(defaults).length && !Object.keys(namespace).length) return metadata;
-    return { ...metadata, providerOptions: { ...existing, [protocol]: { ...defaults, ...namespace } } };
+    const options: Record<string, unknown> = { ...defaults, ...namespace };
+    if (protocol === "vinted-seedance-video") {
+        if (config.videoCameraMovement !== undefined) options.camera_movement = config.videoCameraMovement;
+        if (config.videoNativeFace === "true" || config.videoNativeFace === "false") options.native_face = config.videoNativeFace === "true";
+        else if (config.videoNativeFace === "") delete options.native_face;
+    }
+    if (!Object.keys(options).length) return metadata;
+    return { ...metadata, providerOptions: { ...existing, [protocol]: options } };
 }
 
 async function prepareBackendMediaReference(media: ReferenceVideo | ReferenceAudio) {

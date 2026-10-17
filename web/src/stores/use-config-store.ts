@@ -150,6 +150,8 @@ export type AiConfig = {
     videoSeconds: string;
     vquality: string;
     videoGenerateAudio: string;
+    videoCameraMovement?: string;
+    videoNativeFace?: string;
     videoWatermark: string;
     videoArkPrivateAssetUpload: string;
     systemPrompt: string;

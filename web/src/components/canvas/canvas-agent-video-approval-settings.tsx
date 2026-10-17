@@ -47,7 +47,7 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
         });
     };
 
-    const changeOption = (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload", next: string) => {
+    const changeOption = (key: "vquality" | "size" | "videoSeconds" | "videoGenerateAudio" | "videoWatermark" | "videoArkPrivateAssetUpload" | "videoCameraMovement" | "videoNativeFace", next: string) => {
         if (disabled) return;
         const nextSettings: AgentMediaSettings = {
             ...settings,
@@ -86,6 +86,7 @@ export function CanvasAgentVideoApprovalSettings({ initial, value, theme, disabl
                 <VideoSettingsPanel
                     config={{ ...config, model, size: settings.size, videoSeconds: duration, vquality: settings.quality, videoGenerateAudio: audio, videoWatermark: watermark, videoArkPrivateAssetUpload: privateAssetUpload }}
                     onConfigChange={changeOption}
+                    showProviderOptions={false}
                     theme={theme}
                     showTitle={false}
                     className="min-w-0 space-y-3"
