@@ -3062,7 +3062,7 @@ func TestRunMiniMaxVideoTaskSendsOfficial2KResolution(t *testing.T) {
 		Mode: "video", Prompt: "make it move",
 		Config: providerConfig{BaseURL: server.URL, APIKey: "test-key", Model: "MiniMax-H3", InterfaceType: "minimax-video", VideoSeconds: "6", VQuality: "2K"},
 	})
-	if !requested || err == nil || !strings.Contains(err.Error(), "没有返回任务 ID") {
+	if !requested || err == nil || !strings.Contains(err.Error(), "创建响应缺少任务 ID") {
 		t.Fatalf("expected submission without task ID, requested=%v err=%v", requested, err)
 	}
 }
